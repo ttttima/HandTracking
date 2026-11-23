@@ -562,6 +562,16 @@ export class HandTrackingApp {
     const margin = $('control-margin') as HTMLInputElement;
     const smooth = $('control-smoothing') as HTMLInputElement;
     const onTop = $('control-ontop') as HTMLInputElement;
+    const screensSel = $('control-screens') as HTMLSelectElement;
+    const applyScreens = () => bridge.setScreens(ctl.options.screens).then((area) => {
+      if (area.width > 0 && area.height > 0) {
+        ctl.screenAspect = area.width / area.height;
+        ctl.screenWidth = area.width;
+      }
+    }).catch(() => {});
+    screensSel.value = ctl.options.screens;
+    screensSel.addEventListener('change', () => { ctl.options.screens = screensSel.value === 'all' ? 'all' : 'primary'; save(); void applyScreens(); });
+    void applyScreens();
     const showValues = () => {
       $('control-margin-out').textContent = `${Math.round((1 - 2 * ctl.options.margin) * 100)}% of the picture`;
       $('control-smoothing-out').textContent = ctl.options.smoothing <= 0.8 ? 'Steady' : ctl.options.smoothing >= 2.5 ? 'Snappy' : 'Balanced';
@@ -586,7 +596,7 @@ export class HandTrackingApp {
     };
     bridge.info().then((info) => {
       this.controlShortcut = info.shortcut;
-      if (info.screen.width > 0 && info.screen.height > 0) ctl.screenAspect = info.screen.width / info.screen.height;
+      void applyScreens();
       $('control-shortcut').textContent = info.shortcut;
       if (!info.available) {
         btn.disabled = true;

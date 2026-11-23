@@ -22,10 +22,18 @@ const MOUSEEVENTF = {
 const WHEEL_DELTA = 120;
 
 let user32 = null;
+let winmm = null;
 let loadError = null;
 if (process.platform === 'win32') {
   try {
     const koffi = require('koffi');
+    try {
+      const mm = koffi.load('winmm.dll');
+      winmm = {
+        timeBeginPeriod: mm.func('uint32 __stdcall timeBeginPeriod(uint32 ms)'),
+        timeEndPeriod: mm.func('uint32 __stdcall timeEndPeriod(uint32 ms)'),
+      };
+    } catch { /* gliding still works, at the default timer rate */ }
     const lib = koffi.load('user32.dll');
     user32 = {
       SetCursorPos: lib.func('bool __stdcall SetCursorPos(int x, int y)'),
@@ -42,15 +50,27 @@ if (process.platform === 'win32') {
   loadError = new Error('PC control is only implemented for Windows.');
 }
 
-let screen = { width: 1920, height: 1080 };
+// ── Screen area: the main screen, or every monitor (the virtual desktop) ───────────
+const SM = { CXSCREEN: 0, CYSCREEN: 1, XVIRTUAL: 76, YVIRTUAL: 77, CXVIRTUAL: 78, CYVIRTUAL: 79 };
+let areaMode = 'primary';
+let screen = { x: 0, y: 0, width: 1920, height: 1080 };
 let screenReadAt = 0;
 function screenSize() {
   const now = Date.now();
   if (user32 && now - screenReadAt > 2000) {
-    screen = { width: user32.GetSystemMetrics(0), height: user32.GetSystemMetrics(1) };
+    screen = areaMode === 'all'
+      ? { x: user32.GetSystemMetrics(SM.XVIRTUAL), y: user32.GetSystemMetrics(SM.YVIRTUAL), width: user32.GetSystemMetrics(SM.CXVIRTUAL), height: user32.GetSystemMetrics(SM.CYVIRTUAL) }
+      : { x: 0, y: 0, width: user32.GetSystemMetrics(SM.CXSCREEN), height: user32.GetSystemMetrics(SM.CYSCREEN) };
     screenReadAt = now;
   }
   return screen;
+}
+
+/** 'primary' = the main screen only, 'all' = the pointer spans every monitor. */
+function setArea(mode) {
+  areaMode = mode === 'all' ? 'all' : 'primary';
+  screenReadAt = 0;
+  return screenSize();
 }
 
 const pressed = { left: false, right: false };
@@ -62,18 +82,85 @@ function record(entry) {
 
 const clamp01 = (v) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.5);
 
-function moveTo(nx, ny) {
-  const { width, height } = screenSize();
-  const x = Math.round(clamp01(nx) * (width - 1));
-  const y = Math.round(clamp01(ny) * (height - 1));
-  if (DRY_RUN || !user32) return record({ op: 'move', x, y });
-  user32.SetCursorPos(x, y);
+// ── Gliding ─────────────────────────────────────────────────────────────
+// The camera gives a new pointer position ~30 times a second. Jumping there would look steppy, so
+// the cursor glides from where it is to each new position over most of a frame, updated every few
+// milliseconds. Clicks first jump to the exact target, so they land where the pointer is headed.
+const GLIDE_TICK_MS = 4;
+const GLIDE_SHARE = 0.8; // of the time between camera frames
+let cur = null; // where the cursor is (pixels, float)
+let seg = null; // { fx, fy, tx, ty, t0, dur }
+let lastMoveAt = 0;
+let frameGap = 33;
+let ticker = null;
+let fineTimer = false;
+let idleTimer = null;
+
+function setCursor(x, y) {
+  const rx = Math.round(x);
+  const ry = Math.round(y);
+  if (cur && Math.round(cur.x) === rx && Math.round(cur.y) === ry) { cur = { x, y }; return; }
+  cur = { x, y };
+  user32.SetCursorPos(rx, ry);
+}
+
+function tick() {
+  if (!seg) return stopTicker();
+  const k = Math.min(1, (performance.now() - seg.t0) / seg.dur);
+  setCursor(seg.fx + (seg.tx - seg.fx) * k, seg.fy + (seg.ty - seg.fy) * k);
+  if (k >= 1) { seg = null; stopTicker(); }
+}
+
+function startTicker() {
+  if (ticker) return;
+  // A 1 ms system timer while gliding, so the 4 ms ticks are real (Windows defaults to ~15.6 ms).
+  if (winmm && !fineTimer) { winmm.timeBeginPeriod(1); fineTimer = true; }
+  clearTimeout(idleTimer);
+  ticker = setInterval(tick, GLIDE_TICK_MS);
+}
+
+function stopTicker() {
+  if (ticker) { clearInterval(ticker); ticker = null; }
+  clearTimeout(idleTimer);
+  // Keep the fine timer briefly: the next camera frame is usually only a few ms away.
+  idleTimer = setTimeout(() => { if (fineTimer && !ticker) { winmm.timeEndPeriod(1); fineTimer = false; } }, 500);
+}
+
+/** Jump to the end of the current glide (before a click, so it lands on the target). */
+function finishGlide() {
+  if (!seg || !user32) return;
+  setCursor(seg.tx, seg.ty);
+  seg = null;
+  stopTicker();
+}
+
+function moveTo(nx, ny, snap = false) {
+  const area = screenSize();
+  const tx = area.x + clamp01(nx) * (area.width - 1);
+  const ty = area.y + clamp01(ny) * (area.height - 1);
+  if (DRY_RUN || !user32) return record({ op: 'move', x: Math.round(tx), y: Math.round(ty), ...(snap ? { snap: true } : {}) });
+  const now = performance.now();
+  const gap = now - lastMoveAt;
+  lastMoveAt = now;
+  if (gap > 4 && gap < 120) frameGap = frameGap * 0.8 + gap * 0.2;
+  // Snap, or the first move after a pause (the cursor may have been moved by the real mouse).
+  if (snap || !cur || gap >= 250) {
+    seg = null;
+    stopTicker();
+    cur = null;
+    setCursor(tx, ty);
+    return;
+  }
+  const from = seg ? { x: seg.fx + (seg.tx - seg.fx) * Math.min(1, (now - seg.t0) / seg.dur), y: seg.fy + (seg.ty - seg.fy) * Math.min(1, (now - seg.t0) / seg.dur) } : cur;
+  seg = { fx: from.x, fy: from.y, tx, ty, t0: now, dur: Math.max(8, Math.min(50, frameGap * GLIDE_SHARE)) };
+  startTicker();
 }
 
 function button(which, down) {
   if (which !== 'left' && which !== 'right') return;
   if (pressed[which] === down) return;
   pressed[which] = down;
+  finishGlide();
   const flag = MOUSEEVENTF[`${which.toUpperCase()}${down ? 'DOWN' : 'UP'}`];
   if (DRY_RUN || !user32) return record({ op: down ? 'down' : 'up', button: which });
   user32.mouse_event(flag, 0, 0, 0, 0);
@@ -82,6 +169,7 @@ function button(which, down) {
 function click(which) {
   if (which !== 'left' && which !== 'right') return;
   if (DRY_RUN || !user32) return record({ op: 'click', button: which });
+  finishGlide();
   const up = MOUSEEVENTF[`${which.toUpperCase()}UP`];
   const downFlag = MOUSEEVENTF[`${which.toUpperCase()}DOWN`];
   user32.mouse_event(downFlag, 0, 0, 0, 0);
@@ -161,6 +249,8 @@ function sendKeys(combo) {
 
 /** Never leave a button stuck down (window closed, renderer crashed, control switched off). */
 function releaseAll() {
+  seg = null;
+  stopTicker();
   button('left', false);
   button('right', false);
 }
@@ -170,6 +260,7 @@ module.exports = {
   dryRun: DRY_RUN,
   loadError: loadError ? String(loadError.message || loadError) : null,
   screenSize,
+  setArea,
   moveTo,
   button,
   click,

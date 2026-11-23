@@ -23,7 +23,11 @@ import { assignHands } from '../ui/dashboard';
 
 /** What the controller needs from the host (Electron preload, or a fake in tests). */
 export interface PcBridge {
-  move(x: number, y: number): void;
+  /**
+   * Move the pointer (0..1 of the screen). The host glides the cursor there between camera frames;
+   * `snap` jumps straight there (used just before a click, so it lands exactly).
+   */
+  move(x: number, y: number, snap?: boolean): void;
   button(which: 'left' | 'right', down: boolean): void;
   click(which: 'left' | 'right'): void;
   scroll(notches: number): void;
@@ -46,7 +50,34 @@ export interface ControlOptions {
   margin: number;
   /** Pointer smoothing cutoff in Hz: lower = steadier, higher = snappier. */
   smoothing: number;
+  /** Which screens the pointer covers: the main screen, or every monitor. */
+  screens: 'primary' | 'all';
 }
+
+/**
+ * The point the mouse follows: the middle of the four knuckles. They hardly move when you pinch
+ * or bend a finger, and averaging four detected points cancels much of their frame-to-frame noise.
+ */
+export function pointerAnchor(img: { x: number; y: number }[]): { x: number; y: number } {
+  const k = [LM.INDEX_MCP, LM.MIDDLE_MCP, LM.RING_MCP, LM.PINKY_MCP];
+  let x = 0, y = 0;
+  for (const i of k) { x += img[i].x; y += img[i].y; }
+  return { x: x / k.length, y: y / k.length };
+}
+
+/**
+ * Pointer filter (One Euro, measured in screen widths). When the hand is still the cutoff is the
+ * Pointer setting × CUTOFF_SCALE, so it barely wobbles; any real movement (faster than
+ * SPEED_FLOOR) raises the cutoff by POINTER_BETA Hz per screen width per second, so it keeps up.
+ * Tuned with tests/pointer.test.ts: about half a pixel of jitter and under 20 ms of lag.
+ */
+const CUTOFF_SCALE = 0.2;
+const POINTER_BETA = 100;
+const SPEED_FLOOR = 0.04;
+/** The cursor only moves once the filtered position is this far from where it is (pixels). */
+const JITTER_GATE_PX = 0.6;
+/** A click goes where the pointer was this long before the pinch was detected (aiming, not pinching). */
+const AIM_REWIND_MS = 70;
 
 export type ControlState = 'off' | 'active' | 'paused';
 
@@ -86,16 +117,20 @@ function opennessOf(hand: HandFeatures): number {
 }
 
 export class PcController {
-  readonly options: ControlOptions = { hand: 'Right', margin: 0.2, smoothing: 1.2 };
+  readonly options: ControlOptions = { hand: 'Right', margin: 0.2, smoothing: 1.2, screens: 'primary' };
   /** Screen width / height, so snapped angles are true angles on screen. */
   screenAspect = 16 / 9;
+  /** Width of the area the pointer covers, in pixels (for the jitter gate). */
+  screenWidth = 1920;
+  /** Recent pointer positions, to put a click where you were aiming. */
+  private aimTrail: { t: number; x: number; y: number }[] = [];
   private snapper = new AngleSnapper();
   onChange?: (view: ControlView, reason: string) => void;
 
   private state: ControlState = 'off';
   private controlId: string | null = null;
-  private fx = new OneEuroFilter(1.2, 10);
-  private fy = new OneEuroFilter(1.2, 10);
+  private fx = new OneEuroFilter(1.2 * CUTOFF_SCALE, POINTER_BETA, 1, SPEED_FLOOR);
+  private fy = new OneEuroFilter(1.2 * CUTOFF_SCALE, POINTER_BETA, 1, SPEED_FLOOR);
   private touchStart = -1;
   /** When the pinch (or the hand) was last seen going away during a press, or -1. */
   private lostSince = -1;
@@ -239,10 +274,10 @@ export class PcController {
     }
     this.controlId = hand.id;
 
-    const a = hand.image[LM.INDEX_MCP];
-    const b = hand.image[LM.MIDDLE_MCP];
-    const ax = (a.x + b.x) / 2;
-    this.anchor = { x: mirror ? 1 - ax : ax, y: (a.y + b.y) / 2 };
+    // The raw (unsmoothed) knuckles: the pointer has its own filter below, so smoothing twice
+    // would only add lag.
+    const k = pointerAnchor(hand.rawImage ?? hand.image);
+    this.anchor = { x: mirror ? 1 - k.x : k.x, y: k.y };
     if (this.state !== 'active') return;
 
     // ── Pinch → click / drag ─────────────────────────────────────────────
@@ -275,6 +310,7 @@ export class PcController {
         this.touchStart = now;
       } else if (!this.dragging && now - this.touchStart >= this.t.dragHoldMs) {
         this.dragging = true;
+        this.aim(this.touchStart);
         this.bridge.button('left', true);
         this.snapper.reset(); // a drag starts a fresh straight line
         this.emit('Drag');
@@ -290,6 +326,7 @@ export class PcController {
           this.snapper.reset();
           this.emit('Drop');
         } else if (this.lostSince - this.touchStart <= CLICK_MAX_MS && !handMoving) {
+          this.aim(this.touchStart);
           this.bridge.click('left');
           this.emit('Click');
         }
@@ -303,18 +340,36 @@ export class PcController {
     const m = Math.min(0.45, Math.max(0, this.options.margin));
     const u = Math.min(1, Math.max(0, (this.anchor.x - m) / (1 - 2 * m)));
     const v = Math.min(1, Math.max(0, (this.anchor.y - m) / (1 - 2 * m)));
-    this.fx.minCutoff = this.fy.minCutoff = this.options.smoothing;
+    this.fx.minCutoff = this.fy.minCutoff = this.options.smoothing * CUTOFF_SCALE;
+    // Same speed scale on both axes: y is measured in screen widths too.
     let sx = this.fx.filter(u, now);
-    let sy = this.fy.filter(v, now);
+    let sy = this.fy.filter(v / this.screenAspect, now) * this.screenAspect;
     // Angle snapping (Settings): keep the pointer on fixed directions (0°, 45°, 90°, …).
     if (snapping.enabled) ({ x: sx, y: sy } = this.snapper.snap(sx, sy, now, this.screenAspect, snapping.increment));
     else this.snapper.reset();
+    sx = Math.min(1, Math.max(0, sx));
+    sy = Math.min(1, Math.max(0, sy));
+    const aim = this.aimTrail;
+    aim.push({ t: now, x: sx, y: sy });
+    while (aim.length > 2 && now - aim[0].t > 1000) aim.shift();
 
     // Hold still while a pinch is starting or just released, so clicks land where you aimed.
     const settling = (this.touchStart >= 0 && !this.dragging && now - this.touchStart < CLICK_MAX_MS) || now < this.settleUntil;
     if (settling) return;
-    if (this.lastSent && Math.abs(this.lastSent.x - sx) < 0.0004 && Math.abs(this.lastSent.y - sy) < 0.0004) return;
+    // Ignore sub-pixel wobble: the cursor only moves for a real change.
+    const gate = JITTER_GATE_PX / Math.max(1, this.screenWidth);
+    if (this.lastSent && Math.hypot(this.lastSent.x - sx, (this.lastSent.y - sy) / this.screenAspect) < gate) return;
     this.lastSent = { x: sx, y: sy };
     this.bridge.move(sx, sy);
+  }
+
+  /** Put the cursor where it was just before the pinch began, so the click lands on what you aimed at. */
+  private aim(touchStart: number) {
+    const target = touchStart - AIM_REWIND_MS;
+    let p: { x: number; y: number } | null = null;
+    for (const e of this.aimTrail) { if (e.t > target) break; p = e; }
+    if (!p) return;
+    this.lastSent = { x: p.x, y: p.y };
+    this.bridge.move(p.x, p.y, true);
   }
 }

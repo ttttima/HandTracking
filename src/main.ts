@@ -13,6 +13,7 @@ declare global {
     pcControl?: import('./control/pcController').PcBridge & {
       info(): Promise<{ available: boolean; dryRun: boolean; error: string | null; screen: { width: number; height: number }; shortcut: string }>;
       setAlwaysOnTop(on: boolean): void;
+      setScreens(mode: 'primary' | 'all'): Promise<{ x: number; y: number; width: number; height: number }>;
       onToggle(cb: () => void): () => void;
       listApps(): Promise<{ name: string; id: string }[]>;
       pickProgram(): Promise<{ path: string; name: string } | null>;

@@ -113,7 +113,8 @@ function registerIpc() {
     if (!event.senderFrame || !isOurPage(event.senderFrame.url)) return;
     return fn(...args);
   };
-  ipcMain.on('input:move', guard((x, y) => input.moveTo(x, y)));
+  ipcMain.on('input:move', guard((x, y, snap) => input.moveTo(x, y, !!snap)));
+  ipcMain.handle('input:area', guard((mode) => input.setArea(mode)));
   ipcMain.on('input:button', guard((which, down) => input.button(which, down)));
   ipcMain.on('input:click', guard((which) => input.click(which)));
   ipcMain.on('input:scroll', guard((n) => input.scroll(n)));

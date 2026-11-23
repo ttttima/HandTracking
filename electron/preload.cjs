@@ -6,7 +6,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('pcControl', {
-  move: (x, y) => ipcRenderer.send('input:move', Number(x), Number(y)),
+  move: (x, y, snap) => ipcRenderer.send('input:move', Number(x), Number(y), !!snap),
+  setScreens: (mode) => ipcRenderer.invoke('input:area', mode === 'all' ? 'all' : 'primary'),
   button: (which, down) => ipcRenderer.send('input:button', String(which), !!down),
   click: (which) => ipcRenderer.send('input:click', String(which)),
   scroll: (notches) => ipcRenderer.send('input:scroll', Number(notches)),

@@ -16,8 +16,9 @@ function rig() {
   const analyzer = new HandAnalyzer(t);
   const calls: string[] = [];
   const moves: { x: number; y: number }[] = [];
+  const snaps: { x: number; y: number; before: string }[] = [];
   const bridge: PcBridge = {
-    move: (x, y) => { moves.push({ x, y }); calls.push('move'); },
+    move: (x, y, snap) => { moves.push({ x, y }); calls.push('move'); if (snap) snaps.push({ x, y, before: '' }); },
     button: (b, down) => calls.push(`${b}:${down ? 'down' : 'up'}`),
     click: (b) => calls.push(`click:${b}`),
     scroll: (n) => calls.push(`scroll:${n}`),
@@ -45,7 +46,7 @@ function rig() {
     const steps = Math.max(1, Math.round(ms / FRAME));
     for (let i = 1; i <= steps; i++) play(handAt(from + ((to - from) * i) / steps), FRAME);
   };
-  return { t, ctl, play, calls, moves, actions, curl };
+  return { t, ctl, play, calls, moves, snaps, actions, curl };
 }
 
 /** k = 0 open palm … 1 fist. */
@@ -91,6 +92,24 @@ describe('PC control', () => {
     r.play(OPEN_PINCH, 300);
     expect(r.actions()).toEqual(['click:left']);
     expect(movesDuring).toBe(0);
+  });
+
+  it('a click lands where you were aiming, even if the hand drifts while pinching', () => {
+    const r = rig();
+    r.ctl.start();
+    r.play({ ...OPEN_PINCH, at: { x: 0.5, y: 0.5 } }, 1500); // aim, hold still
+    const aimed = r.moves[r.moves.length - 1];
+    // Closing the pinch nudges the hand a little (2% of the picture) before contact is detected.
+    for (let i = 1; i <= 3; i++) r.play({ ...OPEN_PINCH, at: { x: 0.5 - i * 0.007, y: 0.5 } }, 33);
+    r.play({ ...PINCH, at: { x: 0.479, y: 0.5 } }, 200);
+    r.play({ ...OPEN_PINCH, at: { x: 0.479, y: 0.5 } }, 300);
+    expect(r.actions()).toEqual(['click:left']);
+    expect(r.snaps.length).toBe(1);
+    // The click went back near the aimed spot, not where the hand drifted (~3.5% of the screen).
+    const drift = 0.021 / 0.6;
+    expect(Math.abs(r.snaps[0].x - aimed.x)).toBeLessThan(drift * 0.2);
+    // The jump to the aimed spot comes right before the click.
+    expect(r.calls[r.calls.indexOf('click:left') - 1]).toBe('move');
   });
 
   it('pinch and hold = drag (press, move, release), no click', () => {

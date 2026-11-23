@@ -92,6 +92,8 @@ export interface HandFeatures {
   timestamp: number;
   /** Image-space landmarks (normalized, unmirrored). */
   image: Vec3[];
+  /** The same before smoothing. The mouse pointer uses these with one filter tuned for it. */
+  rawImage: Vec3[];
   /** World-space landmarks (metres). */
   world: Vec3[];
   /** Palm size (wrist → middle MCP) in world metres. */

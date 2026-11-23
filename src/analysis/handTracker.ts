@@ -12,6 +12,8 @@ import { dist2D } from './vec';
 
 export interface TrackedHand extends RawHand {
   id: string;
+  /** The detector's landmarks before smoothing (the mouse pointer filters these itself). */
+  rawLandmarks?: Vec3[];
 }
 
 interface Track {
@@ -92,7 +94,7 @@ export class HandTracker {
         landmarks = tr.img.apply(landmarks, now);
         if (worldLandmarks.length === 21) worldLandmarks = tr.world.apply(worldLandmarks, now);
       }
-      return { ...hand, id: tr.id, handedness: tr.handedness, landmarks, worldLandmarks };
+      return { ...hand, id: tr.id, handedness: tr.handedness, landmarks, worldLandmarks, rawLandmarks: hand.landmarks };
     });
   }
 }

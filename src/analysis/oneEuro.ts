@@ -38,6 +38,8 @@ export class OneEuroFilter {
     public minCutoff = 1.4,
     public beta = 9,
     public dCutoff = 1.0,
+    /** Speeds below this count as standing still (keeps sensor noise from loosening the filter). */
+    public speedFloor = 0,
   ) {}
 
   filter(value: number, tMs: number): number {
@@ -46,7 +48,7 @@ export class OneEuroFilter {
     const prev = this.x.ready ? this.x.value : value;
     const rawD = (value - prev) / dt;
     const edx = this.dx.filter(rawD, alphaFor(this.dCutoff, dt));
-    const cutoff = this.minCutoff + this.beta * Math.abs(edx);
+    const cutoff = this.minCutoff + this.beta * Math.max(0, Math.abs(edx) - this.speedFloor);
     return this.x.filter(value, alphaFor(cutoff, dt));
   }
 }

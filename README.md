@@ -57,11 +57,28 @@ Control is **off** until you click **Control my PC**. Then one hand (right by de
 
 | Do this | Mouse |
 | --- | --- |
-| Move your hand | Move the pointer (it follows your knuckles, so pinching doesn't nudge it) |
+| Move your hand | Move the pointer (it follows the middle of your four knuckles, so pinching or bending a finger doesn't nudge it) |
 | Quick pinch (thumb + index, let go) | Left click; two quick pinches double-click |
 | Pinch and hold, move, let go | Drag and drop. If tracking loses the pinch or your hand for a moment, the drag keeps holding; it drops once the pinch has been gone for 500 ms (**Settings → Sensitivity → Drop drag after**) |
 | Any other gesture | Whatever you set in **Keybinds** (see below) |
 | **Ctrl+Alt+H** (works from any app) | Turn control off or on |
+
+### How the pointer is made precise
+
+- **One filter, on the raw points.** The pointer reads the detector's unsmoothed knuckle points and
+  filters them once, in screen units (a One Euro filter: very steady when your hand is still, quick
+  when it moves). Small movements below a speed threshold count as still, so camera noise can't make
+  the pointer wobble.
+- **Gliding between camera frames.** The camera gives about 30 positions a second; the desktop app
+  moves the cursor towards each one in small steps about 200 times a second, so motion is smooth.
+- **Clicks land where you aimed.** Forming a pinch nudges the hand. A click (or the start of a drag)
+  goes to where the pointer was just before the pinch began, and the pointer holds still around it.
+- **Sub-pixel wobble is ignored**, and **Settings → PC control → Screens** can stretch the pointer
+  across every monitor.
+
+Measured on a simulated hand with camera-like noise (`tests/pointer.test.ts`), against the previous
+version: jitter when still 1.06 → 0.48 px, lag while moving 47–89 ms → 11–18 ms, settling after you
+stop 167–300 ms → 33–67 ms.
 
 ### Saved settings
 

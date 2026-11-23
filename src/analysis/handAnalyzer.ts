@@ -167,6 +167,7 @@ export class HandAnalyzer {
       score: hand.score,
       timestamp,
       image: img,
+      rawImage: (hand as RawHand & { rawLandmarks?: Vec3[] }).rawLandmarks ?? img,
       world: w,
       palmSize: palm,
       palmSizeImage: Math.max(1e-4, dist2D(wrist, mid, aspect)),
