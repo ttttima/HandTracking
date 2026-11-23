@@ -52,6 +52,7 @@ export const BIND_TARGETS: { id: BindTarget; label: string; swipe?: boolean }[] 
   { id: 'middle_finger', label: 'Middle finger' },
   { id: 'thumbs_up', label: 'Thumbs up' },
   { id: 'thumbs_down', label: 'Thumbs down' },
+  { id: 'vulcan', label: 'Vulcan salute' },
   { id: 'swipe_left', label: 'Swipe left', swipe: true },
   { id: 'swipe_right', label: 'Swipe right', swipe: true },
   { id: 'swipe_up', label: 'Swipe up', swipe: true },

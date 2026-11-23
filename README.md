@@ -65,7 +65,7 @@ Control is **off** until you click **Control my PC**. Then one hand (right by de
 ### Keybinds
 
 The **Keybinds** button (top bar, desktop app) lets you choose what every gesture except pinch does while
-control is on: open palm, closed palm, fist, pointing, peace, middle finger, thumbs up, thumbs down, and
+control is on: open palm, closed palm, fist, pointing, peace, middle finger, thumbs up, thumbs down, Vulcan salute, and
 the four swipe directions. Either hand can trigger them. Each one can be set to:
 
 - Nothing, left click, right click, double click, scroll up, scroll down
@@ -150,6 +150,7 @@ Finger state comes from **joint bend angles** in 3-D, so it is independent of ha
 | ✊ Fist | index–pinky folded, thumb not clearly out |
 | ☝️ Pointing | index extended, middle/ring/pinky folded, thumb not pinching the index |
 | ✌️ Peace | index + middle extended, thumb/ring/pinky folded |
+| 🖖 Vulcan salute | index to pinky extended in two pairs: a gap between middle and ring above 14°, and the index–middle and ring–pinky gaps much smaller (thumb in or out) |
 | 🤏 Pinch | thumb and index fingertips together or close, at any rotation; index reaching out (rejects fists) |
 | 👍 Thumbs up / 👎 down | only the thumb extended **and** pointing up / down in the image |
 | Drag | thumb–index touch held > 480 ms → `drag:start` / `drag:move` / `drag:end` |

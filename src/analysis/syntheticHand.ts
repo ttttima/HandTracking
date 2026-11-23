@@ -18,6 +18,8 @@ export interface HandPose {
   thumbAbduction?: number;
   /** Multiplies the natural finger fan angles: 0 = fingers together, 2 = spread wide. */
   spread?: number;
+  /** Exact fan angle per finger in degrees [index, middle, ring, pinky], overriding `spread`. */
+  fan?: [number, number, number, number];
   /** Thumb flex [CMC, MCP, IP] in degrees, curling towards the palm / pinky side. */
   thumb?: Flex;
   /** Place the thumb tip at the index tip, plus this offset (metres). */
@@ -75,7 +77,8 @@ export function makeHand(pose: HandPose = {}): RawHand {
   const fingerStart: Record<string, number> = { index: 5, middle: 9, ring: 13, pinky: 17 };
   for (const name of ['index', 'middle', 'ring', 'pinky'] as const) {
     const b = FINGER_BASE[name];
-    const fan = b.spread * (pose.spread ?? 1);
+    const k = (['index', 'middle', 'ring', 'pinky'] as const).indexOf(name);
+    const fan = pose.fan ? pose.fan[k] : b.spread * (pose.spread ?? 1);
     const u = v(Math.sin(deg(fan)), -Math.cos(deg(fan)), 0);
     const flex = pose[name] ?? STRAIGHT;
     const i0 = fingerStart[name];
@@ -141,5 +144,6 @@ export const POSES: Record<string, HandPose> = {
   peace: { ring: CURLED, pinky: CURLED, thumbAbduction: 35, thumb: [25, 45, 60] },
   thumbs_up: { index: CURLED, middle: CURLED, ring: CURLED, pinky: CURLED, thumbAbduction: 85, roll: -90 },
   thumbs_down: { index: CURLED, middle: CURLED, ring: CURLED, pinky: CURLED, thumbAbduction: 85, roll: 90 },
+  vulcan: { fan: [14, 11, -11, -14], thumbAbduction: 60 },
   pinch: { index: [35, 55, 35], middle: CURLED, ring: CURLED, pinky: CURLED, thumbTouchIndex: v(0.006, 0.004, 0) },
 };

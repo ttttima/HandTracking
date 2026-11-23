@@ -55,13 +55,17 @@ export function fingerExtension(w: Vec3[], f: FingerName, palm: number, t: Thres
  * of neighbouring fingers (knuckle → fingertip), measured in 3-D so it ignores hand rotation.
  */
 export function fingerSpread(w: Vec3[]): number {
+  const g = fingerGaps(w);
+  return (g[0] + g[1] + g[2]) / 3;
+}
+
+/** Angle (degrees) between each pair of neighbouring fingers: [index–middle, middle–ring, ring–pinky]. */
+export function fingerGaps(w: Vec3[]): [number, number, number] {
   const dirs = (['index', 'middle', 'ring', 'pinky'] as const).map((f) => {
     const [mcp, , , tip] = FINGER_JOINTS[f];
     return sub(w[tip], w[mcp]);
   });
-  let sum = 0;
-  for (let i = 0; i < 3; i++) sum += angleBetween(dirs[i], dirs[i + 1]);
-  return sum / 3;
+  return [angleBetween(dirs[0], dirs[1]), angleBetween(dirs[1], dirs[2]), angleBetween(dirs[2], dirs[3])];
 }
 
 /** Image-space area enclosed by thumb (MCP→tip) and index (tip→MCP), in palm sizes squared. */
@@ -174,6 +178,7 @@ export class HandAnalyzer {
       pinchDistance: contactMap[contactKey('thumb', 'index')].distance,
       indexReach: dist(w[LM.INDEX_TIP], w[LM.WRIST]) / palm,
       spread: fingerSpread(w),
+      gaps: fingerGaps(w),
       ringArea: ringArea(img, aspect, Math.max(1e-4, dist2D(wrist, mid, aspect))),
       roll,
       palmFacing,

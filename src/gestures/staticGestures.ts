@@ -55,9 +55,16 @@ export function computeStaticScores(
 
   const pinch = Math.min(pinchStrength, reach);
 
+  // Vulcan salute: four fingers out in two pairs, a clear V between middle and ring.
+  const [gIM, gMR, gRP] = h.gaps;
+  const split = smoothstep(t.vulcanGapDeg - 4, t.vulcanGapDeg + 4, gMR);
+  // The other two gaps must be clearly smaller (the pinky fans out a little on its own, so up to ~half is fine).
+  const paired = 1 - smoothstep(0.55, 0.8, Math.max(gIM, gRP) / Math.max(1, gMR));
+  const vulcan = Math.min(fourOut, split, paired);
+
   return {
-    open_palm: Math.min(patternScore(ext, [1, 1, 1, 1, 1]), spread),
-    closed_palm: closedPalm,
+    open_palm: Math.min(patternScore(ext, [1, 1, 1, 1, 1]), spread, 1 - vulcan),
+    closed_palm: Math.min(closedPalm, 1 - vulcan),
     middle_finger: patternScore(ext, [null, 0, 1, 0, 0]),
     // A pinch with a curled index looks fist-like; never let it count as a fist (holding a fist pauses PC control).
     fist: Math.min(patternScore(ext, [null, 0, 0, 0, 0]), 1 - smoothstep(0.75, 1, thumb), 1 - pinch),
@@ -67,5 +74,6 @@ export function computeStaticScores(
     pinch,
     thumbs_up: Math.min(thumbOnly, up),
     thumbs_down: Math.min(thumbOnly, down),
+    vulcan,
   };
 }

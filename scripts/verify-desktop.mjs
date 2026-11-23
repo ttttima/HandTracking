@@ -100,7 +100,7 @@ try {
   await page.click('#btn-keybinds');
   await page.waitForTimeout(400);
   const rows = await page.locator('#keybind-list .bind-row').count();
-  record('keybinds panel lists every gesture except pinch', rows === 12, `${rows} rows`);
+  record('keybinds panel lists every gesture except pinch', rows === 13, `${rows} rows`);
   const peaceRow = page.locator('#keybind-list .bind-row').filter({ hasText: 'Peace' });
   await peaceRow.locator('select').first().selectOption('keys');
   await peaceRow.locator('.bind-keys input').fill('ctrl+shift+t');

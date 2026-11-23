@@ -110,6 +110,8 @@ export interface HandFeatures {
   indexReach: number;
   /** Mean angle in degrees between neighbouring fingers (index…pinky). ~0 = held together. */
   spread: number;
+  /** Angles in degrees between neighbouring fingers: [index–middle, middle–ring, ring–pinky]. */
+  gaps: [number, number, number];
   /**
    * Area of the opening between thumb and index as seen by the camera, in palm sizes squared.
    * Large = a visible ring, near zero = the ring is edge-on. Not used by any sign right now;
@@ -132,6 +134,7 @@ export const GESTURE_IDS = [
   'pinch',
   'thumbs_up',
   'thumbs_down',
+  'vulcan',
 ] as const;
 export type StaticGestureId = (typeof GESTURE_IDS)[number];
 export type GestureId = StaticGestureId;

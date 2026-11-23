@@ -73,7 +73,7 @@ describe('static gestures', () => {
       { roll: 35 },
       { roll: -50 },
     ];
-    for (const name of ['open_palm', 'fist', 'peace', 'pinch', 'pointing'] as StaticGestureId[]) {
+    for (const name of ['open_palm', 'fist', 'peace', 'pinch', 'pointing', 'vulcan'] as StaticGestureId[]) {
       for (const v of variants) {
         if (v.roll !== undefined && POSES[name].roll !== undefined) continue;
         expect(topGesture({ ...POSES[name], ...v }).winner, `${name} ${JSON.stringify(v)}`).toBe(name);
@@ -107,6 +107,20 @@ describe('pinch at any rotation', () => {
   it('thumb–index together is a pinch whether or not the ring faces the camera', () => {
     const ring = { index: [35, 55, 35] as [number, number, number], thumbTouchIndex: { x: 0.006, y: 0.004, z: 0 } };
     for (const yaw of [0, 45, 70, -60]) expect(topGesture({ ...ring, yaw }).winner, `yaw ${yaw}`).toBe('pinch');
+  });
+});
+
+describe('Vulcan salute', () => {
+  it('needs the gap between middle and ring, not just spread fingers', () => {
+    expect(topGesture(POSES.vulcan).winner).toBe('vulcan');
+    expect(topGesture({ ...POSES.vulcan, thumbAbduction: 20 }).winner).toBe('vulcan'); // thumb tucked is fine
+    for (const pose of [POSES.open_palm, POSES.closed_palm, {}, { spread: 1.5 }]) {
+      expect(topGesture(pose).scores.vulcan, JSON.stringify(pose)).toBeLessThan(t.gestureOff);
+    }
+    // Gap in the wrong place (index apart, others together) is not a Vulcan salute.
+    expect(topGesture({ fan: [22, 2, 0, -2] }).scores.vulcan).toBeLessThan(t.gestureOff);
+    // With a folded finger it is not either.
+    expect(topGesture({ ...POSES.vulcan, pinky: [80, 100, 65] }).scores.vulcan).toBeLessThan(t.gestureOff);
   });
 });
 

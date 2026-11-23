@@ -83,6 +83,8 @@ export interface Thresholds {
   fingersTogetherDeg: number;
   /** Mean angle between neighbouring fingers above which they count as spread (open palm). */
   fingersSpreadDeg: number;
+  /** Vulcan salute: the middle–ring gap must open past this (and be much wider than the other two gaps). */
+  vulcanGapDeg: number;
 
   // ── Temporal gestures ──────────────────────────────────────────────────────
   /** Hold a thumb–index touch this long to start a drag. */
@@ -132,6 +134,7 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
   thumbVerticalMin: 0.55,
   fingersTogetherDeg: 6,
   fingersSpreadDeg: 10,
+  vulcanGapDeg: 14,
 
   dragHoldMs: 480,
   dragDropMs: 500,
@@ -179,6 +182,7 @@ export const THRESHOLD_GROUPS: { title: string; fields: ThresholdField[] }[] = [
       { key: 'fingersTogetherDeg', label: 'Fingers together under', min: 1, max: 20, step: 0.5, unit: '°', help: 'Average angle between neighbouring fingers below which a flat hand is a closed palm.' },
       { key: 'fingersSpreadDeg', label: 'Fingers spread over', min: 3, max: 30, step: 0.5, unit: '°', help: 'Average angle between neighbouring fingers above which a flat hand is an open palm.' },
       { key: 'dragDropMs', label: 'Drop drag after', min: 0, max: 1500, step: 50, unit: 'ms', help: 'While dragging with a pinch, let go only once the pinch has been gone this long. Brief tracking dropouts are ignored.' },
+      { key: 'vulcanGapDeg', label: 'Vulcan gap over', min: 6, max: 40, step: 1, unit: '°', help: 'Angle between middle and ring finger above which a flat hand is a Vulcan salute (the other two gaps must stay much smaller).' },
       { key: 'pinchNone', label: 'Pinch 0% at', min: 0.2, max: 1.2, step: 0.01, unit: '×palm', help: 'Thumb–index distance where pinch strength reaches zero.' },
     ],
   },
@@ -273,6 +277,7 @@ export const GESTURES: GestureMeta[] = [
   { id: 'thumbs_down', label: 'Thumbs down', description: 'Thumb points down, the rest are folded' },
   { id: 'middle_finger', label: 'Middle finger', description: 'Only the middle finger out' },
   { id: 'peace', label: 'Peace', description: 'Index and middle out, the rest folded' },
+  { id: 'vulcan', label: 'Vulcan salute', description: 'Fingers out in two pairs with a gap between middle and ring' },
   { id: 'pointing', label: 'Pointing', description: 'Only the index finger out' },
   { id: 'closed_palm', label: 'Closed palm', description: 'Flat hand, four fingers out and held together' },
   { id: 'open_palm', label: 'Open palm', description: 'All five fingers out and spread apart' },
@@ -298,6 +303,7 @@ export const GESTURE_TOGGLES: { id: ToggleId; label: string; pc?: string }[] = [
   { id: 'pinch', label: 'Pinch', pc: 'click and drag' },
   { id: 'thumbs_up', label: 'Thumbs up' },
   { id: 'thumbs_down', label: 'Thumbs down' },
+  { id: 'vulcan', label: 'Vulcan salute' },
   { id: 'swipe', label: 'Swipe' },
 ];
 
