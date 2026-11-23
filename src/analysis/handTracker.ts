@@ -44,7 +44,10 @@ export class HandTracker {
   update(frame: DetectionFrame, now: number): TrackedHand[] {
     const aspect = frame.width / Math.max(1, frame.height);
     this.tracks = this.tracks.filter((tr) => now - tr.lastSeen <= this.forgetAfterMs);
-    frame = { ...frame, hands: dedupeHands(frame.hands, aspect) };
+    // The model occasionally returns a hand with a NaN coordinate; such a detection is useless and
+    // would spread NaN into smoothing, gestures and the mouse pointer. Treat it as not detected.
+    const valid = frame.hands.filter((h) => h.landmarks.length === 21 && h.landmarks.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z)));
+    frame = { ...frame, hands: dedupeHands(valid, aspect) };
 
     // Greedy nearest-wrist matching.
     const claimed = new Set<Track>();

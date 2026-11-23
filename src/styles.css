@@ -105,6 +105,19 @@ kbd { font: inherit; font-weight: 600; padding: 0 5px; border: 1px solid var(--r
 .stage.mirror video, .stage.mirror img { transform: scaleX(-1); }
 .stage .layer { pointer-events: none; }
 
+.calib {
+  position: absolute; left: 16px; top: 16px; z-index: 3; width: min(340px, calc(100% - 32px));
+  display: grid; gap: 8px; padding: 14px 16px; border-radius: 10px;
+  background: rgba(42, 37, 34, 0.9); color: var(--bone);
+}
+.calib[hidden] { display: none; }
+.calib-title { font-size: 20px; font-weight: 680; font-stretch: 108%; letter-spacing: -0.01em; }
+.calib-text { color: #cfc8bf; font-size: 14px; }
+.calib-bar { height: 4px; border-radius: 2px; background: rgba(235, 231, 225, 0.18); overflow: hidden; }
+.calib-bar > span { display: block; height: 100%; width: 0; background: var(--bone); }
+.calib .btn { justify-self: start; }
+.reach-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+
 .stage-empty {
   position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px;
   padding: clamp(20px, 4vw, 44px); background: var(--film); color: var(--bone); z-index: 2;

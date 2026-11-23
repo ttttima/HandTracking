@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld('pcControl', {
     path: () => ipcRenderer.invoke('settings:path'),
     reveal: () => ipcRenderer.send('settings:reveal'),
   },
+  /** The status badge next to the mouse pointer (electron/overlay.cjs). */
+  setOverlay: (state) => ipcRenderer.send('overlay:update', state),
   setAlwaysOnTop: (on) => ipcRenderer.send('window:on-top', !!on),
   onToggle: (cb) => {
     const handler = () => cb();

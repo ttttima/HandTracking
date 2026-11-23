@@ -80,7 +80,7 @@ function record(entry) {
   if (log.length > 500) log.shift();
 }
 
-const clamp01 = (v) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.5);
+const clamp01 = (v) => Math.min(1, Math.max(0, v));
 
 // ── Gliding ─────────────────────────────────────────────────────────────
 // The camera gives a new pointer position ~30 times a second. Jumping there would look steppy, so
@@ -135,6 +135,8 @@ function finishGlide() {
 }
 
 function moveTo(nx, ny, snap = false) {
+  // A broken position is ignored: the cursor stays where it is (never parked mid-screen).
+  if (!Number.isFinite(nx) || !Number.isFinite(ny)) return record({ op: 'move-rejected' });
   const area = screenSize();
   const tx = area.x + clamp01(nx) * (area.width - 1);
   const ty = area.y + clamp01(ny) * (area.height - 1);

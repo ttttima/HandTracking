@@ -84,6 +84,24 @@ try {
   record('control is active', view?.state === 'active', JSON.stringify(view));
   record('pointer moves sent to the OS layer', moves.length > 0, moves.length ? `${moves.length} moves, last at ${moves.at(-1).x},${moves.at(-1).y}` : 'none');
   record('peace sign = right click', right.length === 1, `${right.length} right clicks`);
+  const badge = await app.evaluate(() => globalThis.__hgOverlay?.());
+  record('pointer badge shows the sign and what it does', badge?.visible && badge.title === 'Peace' && badge.detail === 'Right click', JSON.stringify(badge));
+  const overlayWin = app.windows().find((w) => w.url().endsWith('overlay.html'));
+  const badgeText = overlayWin ? await overlayWin.evaluate(() => document.getElementById('badge').className + ' ' + document.getElementById('title').textContent) : '';
+  record('badge window draws it', /show/.test(badgeText) && /Peace/.test(badgeText), badgeText);
+  // Reach calibration: starts on the picture, holds the mouse still, and refuses a hand that never moved.
+  await page.click('#btn-settings');
+  await page.waitForTimeout(300);
+  await page.click('#btn-calibrate');
+  await page.waitForTimeout(300);
+  const calibShown = await page.evaluate(() => !document.getElementById('calib').hidden && window.handGestures.app.control.suspended);
+  const movesBefore = (await app.evaluate(() => globalThis.__hgInputLog ?? [])).filter((e) => e.op === 'move').length;
+  if (process.env.HG_SCREENSHOT_CALIB) { await page.waitForTimeout(4000); await page.screenshot({ path: process.env.HG_SCREENSHOT_CALIB }); await page.waitForTimeout(4600); }
+  else await page.waitForTimeout(8600);
+  const movesDuring = (await app.evaluate(() => globalThis.__hgInputLog ?? [])).filter((e) => e.op === 'move').length - movesBefore;
+  const calibEnd = await page.evaluate(() => ({ open: !document.getElementById('calib').hidden, box: window.handGestures.app.control.options.box, toast: [...document.querySelectorAll('.toast')].map((t) => t.textContent).join(' | ') }));
+  record('reach calibration runs and keeps the mouse still', calibShown && movesDuring === 0 && !calibEnd.open, `${movesDuring} moves while calibrating`);
+  record('a hand that never moved is not accepted as a reach', calibEnd.box === null && /too small/.test(calibEnd.toast), calibEnd.toast);
   await page.evaluate(() => window.pcControl.minimizeActiveWindow());
   await page.waitForTimeout(200);
   const minimized = (await app.evaluate(() => globalThis.__hgInputLog ?? [])).filter((e) => e.op === 'minimize');
@@ -92,6 +110,10 @@ try {
   await page.waitForTimeout(200);
   const winD = (await app.evaluate(() => globalThis.__hgInputLog ?? [])).filter((e) => e.op === 'win+d');
   record('show-desktop (Win+D) reaches the OS layer', winD.length === 1, `${winD.length} Win+D calls (dry run)`);
+  await page.evaluate(() => window.pcControl.move(NaN, 0.5));
+  await page.waitForTimeout(150);
+  const lastOps = (await app.evaluate(() => globalThis.__hgInputLog ?? [])).slice(-1).map((e) => e.op);
+  record('a broken position is refused, never sent as mid-screen', lastOps[0] === 'move-rejected', lastOps.join(', '));
   record('no left click / stuck button', !log.some((e) => e.op === 'down' || (e.op === 'click' && e.button === 'left')));
 
   if (process.env.HG_SCREENSHOT) await page.screenshot({ path: process.env.HG_SCREENSHOT });

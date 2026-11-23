@@ -72,7 +72,7 @@ export const ACTIONS: { id: ActionKind; label: string }[] = [
   { id: 'show_desktop', label: 'Show desktop / bring windows back (Win+D)' },
   { id: 'desktop_second', label: 'Go to second desktop (creates it)' },
   { id: 'desktop_first', label: 'Back to first desktop' },
-  { id: 'pause_control', label: 'Pause or resume control' },
+  { id: 'pause_control', label: 'Turn control on / off' },
   { id: 'open_app', label: 'Open an app…' },
   { id: 'keys', label: 'Keyboard shortcut…' },
 ];
@@ -124,8 +124,8 @@ const STORAGE = 'handgestures.keybinds.v1';
  * Bumped when new default binds are added. Saved binds from an older revision pick up the new
  * defaults for targets that were still set to Nothing.
  */
-const REVISION = 2;
-const NEW_DEFAULTS: Record<number, BindTarget[]> = { 2: ['swipe_left', 'swipe_right'] };
+const REVISION = 3;
+const NEW_DEFAULTS: Record<number, BindTarget[]> = { 2: ['swipe_left', 'swipe_right'], 3: ['fist'] };
 const ACTION_IDS = new Set(ACTIONS.map((a) => a.id));
 
 export function loadKeybinds(): void {

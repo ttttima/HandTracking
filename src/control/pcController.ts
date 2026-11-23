@@ -6,7 +6,7 @@
  *   Quick pinch  left click (two quick pinches = double click, as the OS counts it)
  *   Hold pinch   press and drag, release to drop
  *   Everything else (signs from either hand, swipes) runs its keybind (see keybinds.ts);
- *   by default peace = right click, middle finger = minimise, hold fist = pause, swipe = scroll.
+ *   by default peace = right click, middle finger = minimise, hold fist = turn control on / off, swipes = desktops and scroll.
  *
  * With angle snapping on (Settings), pointer movement and drags follow fixed directions.
  *
@@ -52,6 +52,26 @@ export interface ControlOptions {
   smoothing: number;
   /** Which screens the pointer covers: the main screen, or every monitor. */
   screens: 'primary' | 'all';
+  /**
+   * Calibrated reach (Settings → Calibrate): the part of the picture, as shown with `mirror`, that
+   * covers the screen. Null = the centred box from `margin`.
+   */
+  box: ReachBox | null;
+  /** Show the status badge next to the mouse pointer. */
+  badge: boolean;
+}
+
+/** A rectangle of the picture (0..1), in display space; `mirror` = whether the view was mirrored. */
+export interface ReachBox { x0: number; y0: number; x1: number; y1: number; mirror: boolean }
+
+/** The rectangle that maps to the screen, for the current mirror setting. */
+export function reachRect(o: Pick<ControlOptions, 'margin' | 'box'>, mirror: boolean): { x0: number; y0: number; x1: number; y1: number } {
+  const b = o.box;
+  if (b && b.x1 - b.x0 > 0.05 && b.y1 - b.y0 > 0.05) {
+    return b.mirror === mirror ? { x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1 } : { x0: 1 - b.x1, y0: b.y0, x1: 1 - b.x0, y1: b.y1 };
+  }
+  const m = Math.min(0.45, Math.max(0, o.margin));
+  return { x0: m, y0: m, x1: 1 - m, y1: 1 - m };
 }
 
 /**
@@ -85,6 +105,10 @@ export interface ControlView {
   state: ControlState;
   hand: Handedness;
   margin: number;
+  /** The part of the picture (display space) that covers the screen. */
+  rect: { x0: number; y0: number; x1: number; y1: number };
+  /** 0..1 while a pinch is held on its way to becoming a drag; 0 otherwise. */
+  pinch: number;
   /** Pointer anchor in display space (0..1), or null when the control hand is not in view. */
   anchor: { x: number; y: number } | null;
   dragging: boolean;
@@ -117,7 +141,10 @@ function opennessOf(hand: HandFeatures): number {
 }
 
 export class PcController {
-  readonly options: ControlOptions = { hand: 'Right', margin: 0.2, smoothing: 1.2, screens: 'primary' };
+  readonly options: ControlOptions = { hand: 'Right', margin: 0.2, smoothing: 1.2, screens: 'primary', box: null, badge: true };
+  /** While true (reach calibration) the hand is tracked but nothing moves, clicks or fires. */
+  suspended = false;
+  private mirror = true;
   /** Screen width / height, so snapped angles are true angles on screen. */
   screenAspect = 16 / 9;
   /** Width of the area the pointer covers, in pixels (for the jitter gate). */
@@ -165,7 +192,12 @@ export class PcController {
   }
 
   get view(): ControlView {
-    return { state: this.state, hand: this.options.hand, margin: this.options.margin, anchor: this.anchor, dragging: this.dragging };
+    const pinch = this.dragging ? 1 : this.touchStart >= 0 && this.lostSince < 0
+      ? Math.min(1, Math.max(0, (this.frameNow - this.touchStart) / this.t.dragHoldMs)) : 0;
+    return {
+      state: this.state, hand: this.options.hand, margin: this.options.margin, rect: reachRect(this.options, this.mirror),
+      pinch, anchor: this.anchor, dragging: this.dragging,
+    };
   }
 
   get isOn(): boolean {
@@ -220,8 +252,9 @@ export class PcController {
   private runBind(target: BindTarget, trigger: Keybind['trigger']) {
     const bind = keybinds[target];
     if (!bind || bind.action === 'none' || bind.trigger !== trigger) return;
-    // Pausing works while paused (to resume); everything else only while control is active.
-    if (this.state === 'off' || (this.state === 'paused' && bind.action !== 'pause_control')) return;
+    // The on/off sign works in every state (it can turn control on from stopped); everything else
+    // only while control is active.
+    if (this.suspended || (bind.action !== 'pause_control' && this.state !== 'active')) return;
     const now = this.frameNow;
     if (now - (this.lastFired.get(target) ?? -Infinity) < BIND_COOLDOWN_MS) return;
     this.lastFired.set(target, now);
@@ -236,7 +269,9 @@ export class PcController {
       case 'desktop_second': this.bridge.switchDesktop('second'); break;
       case 'desktop_first': this.bridge.switchDesktop('first'); break;
       case 'pause_control':
-        this.setState(this.state === 'active' ? 'paused' : 'active', this.state === 'active' ? 'Paused' : 'Resumed');
+        // Off: the hand stays tracked (so the same sign turns it back on) but nothing moves or clicks.
+        if (this.state === 'active') this.setState('paused', 'Paused');
+        else this.setState('active', this.state === 'off' ? 'Started' : 'Resumed');
         return;
       case 'open_app':
         if (!bind.app) return;
@@ -255,6 +290,7 @@ export class PcController {
   /** Call once per analysed frame. */
   update(hands: HandFeatures[], mirror: boolean, now: number): void {
     this.frameNow = now;
+    this.mirror = mirror;
     if (this.state === 'off') return;
     const hand = assignHands(hands)[this.options.hand];
     if (!hand) {
@@ -277,8 +313,13 @@ export class PcController {
     // The raw (unsmoothed) knuckles: the pointer has its own filter below, so smoothing twice
     // would only add lag.
     const k = pointerAnchor(hand.rawImage ?? hand.image);
+    if (!Number.isFinite(k.x) || !Number.isFinite(k.y)) return; // a bad frame: skip it, keep everything as is
     this.anchor = { x: mirror ? 1 - k.x : k.x, y: k.y };
     if (this.state !== 'active') return;
+    if (this.suspended) {
+      this.cancelPress();
+      return;
+    }
 
     // ── Pinch → click / drag ─────────────────────────────────────────────
     const contact = hand.contactMap['thumb-index'].state === 'touching';
@@ -337,9 +378,9 @@ export class PcController {
     }
 
     // ── Pointer ──────────────────────────────────────────────────────────
-    const m = Math.min(0.45, Math.max(0, this.options.margin));
-    const u = Math.min(1, Math.max(0, (this.anchor.x - m) / (1 - 2 * m)));
-    const v = Math.min(1, Math.max(0, (this.anchor.y - m) / (1 - 2 * m)));
+    const r = reachRect(this.options, mirror);
+    const u = Math.min(1, Math.max(0, (this.anchor.x - r.x0) / (r.x1 - r.x0)));
+    const v = Math.min(1, Math.max(0, (this.anchor.y - r.y0) / (r.y1 - r.y0)));
     this.fx.minCutoff = this.fy.minCutoff = this.options.smoothing * CUTOFF_SCALE;
     // Same speed scale on both axes: y is measured in screen widths too.
     let sx = this.fx.filter(u, now);
@@ -347,6 +388,13 @@ export class PcController {
     // Angle snapping (Settings): keep the pointer on fixed directions (0°, 45°, 90°, …).
     if (snapping.enabled) ({ x: sx, y: sy } = this.snapper.snap(sx, sy, now, this.screenAspect, snapping.increment));
     else this.snapper.reset();
+    if (!Number.isFinite(sx) || !Number.isFinite(sy)) {
+      // Never send a broken position (the OS layer would park the cursor mid-screen): start the filters over.
+      this.fx = new OneEuroFilter(1.2 * CUTOFF_SCALE, POINTER_BETA, 1, SPEED_FLOOR);
+      this.fy = new OneEuroFilter(1.2 * CUTOFF_SCALE, POINTER_BETA, 1, SPEED_FLOOR);
+      this.snapper.reset();
+      return;
+    }
     sx = Math.min(1, Math.max(0, sx));
     sy = Math.min(1, Math.max(0, sy));
     const aim = this.aimTrail;

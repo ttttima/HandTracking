@@ -43,6 +43,9 @@ export class OneEuroFilter {
   ) {}
 
   filter(value: number, tMs: number): number {
+    // A single NaN/Infinity would poison the filter state for good (every later output NaN);
+    // hold the last good value instead and skip the bad sample.
+    if (!Number.isFinite(value) || !Number.isFinite(tMs)) return this.x.ready ? this.x.value : value;
     const dt = this.lastT < 0 ? 1 / 60 : Math.max(1e-3, (tMs - this.lastT) / 1000);
     this.lastT = tMs;
     const prev = this.x.ready ? this.x.value : value;

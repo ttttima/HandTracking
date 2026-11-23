@@ -94,7 +94,7 @@ control is on: open palm, closed palm, fist, pointing, peace, middle finger, thu
 the four swipe directions. Either hand can trigger them. Each one can be set to:
 
 - Nothing, left click, right click, double click, scroll up, scroll down
-- Minimise window, show desktop / bring windows back (Win+D), pause or resume control
+- Minimise window, show desktop / bring windows back (Win+D), turn control on / off
 - **Second desktop**: from your original desktop, go to a second virtual desktop, creating it if it does
   not exist yet. **Back to first desktop** returns to the original. At most two desktops are used: on the
   second desktop, "second" does nothing, and on the original, "back" does nothing.
@@ -104,13 +104,34 @@ the four swipe directions. Either hand can trigger them. Each one can be set to:
   keys, or pick a common one (Alt+Tab, copy/paste, media play/pause, volume…)
 
 Signs can fire **when made** or **when held** for about a second. Defaults: peace = right click, middle
-finger = minimise window, hold fist = pause or resume, swipe left = second desktop, swipe right = back to
+finger = minimise window, hold fist = turn control on / off, swipe left = second desktop, swipe right = back to
 the first desktop, swipe up/down = scroll. Gestures switched off in
 Settings → Gestures never fire.
+
+**Turning control on and off with your hand**: hold a fist for about a second (the "Hold to trigger"
+time in Settings). With control on, it turns off: the mouse stops following your hand and no gesture
+does anything, but the camera keeps watching for the same sign. Hold the fist again and control is
+back on, even if you never pressed **Control my PC**, as long as the camera is running. A short rising
+tone means on and a falling one means off, so you can tell without looking at the app. Holding the fist
+longer does not switch it back. To use a different sign, give that sign **Turn control on / off** in Keybinds.
 
 The box drawn on the picture is the part of the camera view that covers your whole screen,
 so you can reach the screen edges without leaving the frame. In **Settings → PC control** you can pick the
 hand, change the reach (box size) and pointer smoothing, and keep the window on top of other apps.
+
+**Calibrate reach** (Settings → PC control) fits the box to you instead of using a centred one. Press it with
+the camera running, hold up the hand that moves the mouse, and after a 2-second countdown move it slowly over
+the area that feels comfortable, corners included, for 6 seconds. The mouse stays still meanwhile. That area,
+ignoring stray frames and pulled in slightly so the screen edges are easy to reach, then covers the whole
+screen. It is drawn on the picture and saved with your settings. If your hand barely moved or was out of view,
+nothing changes and the app says why. Moving the Reach slider, or **Use the slider again**, goes back to the
+centred box.
+
+**Pointer badge**: while control is on, a small label follows the mouse pointer so you can see what your hand
+is doing without looking at the app: the sign and what it does (signs with no keybind are not shown), a ring
+that fills while a pinch turns into a drag or while a "when held" sign counts up, **Dragging**, the swipe that
+just fired, and **Control on / off** when it switches. Holding the on/off sign shows its ring even while
+control is off. Clicks go straight through the badge. Turn it off in Settings → PC control.
 
 Safety: mouse buttons are always released if the hand leaves the picture, control is
 switched off, or the window closes.
@@ -217,7 +238,10 @@ src/
 ├── gestures/
 │   ├── staticGestures.ts     Per-frame soft scores for each gesture
 │   └── gestureEngine.ts      Debounce/hysteresis, drag/hold/swipe state machines, contact events
-├── control/pcController.ts   Hand → mouse: pointer mapping, pinch click/drag, right click, scroll, pause
+├── control/
+│   ├── pcController.ts       Hand → mouse: pointer mapping, pinch click/drag, keybinds, on/off
+│   ├── reachCalibration.ts   Fits the reach box to a sweep of your hand
+│   └── cursorBadge.ts        What the badge next to the mouse pointer says
 ├── events/eventBus.ts        Typed event bus (the integration point)
 ├── actions/actionMapper.ts   Gesture-event → named-action bindings (in-page demo actions)
 ├── render/
@@ -229,6 +253,7 @@ src/
 electron/
 ├── main.cjs                  Desktop window, app:// file serving, camera permission, Ctrl+Alt+H
 ├── preload.cjs               The only API the page gets: window.pcControl (move, click, scroll…)
+├── overlay.cjs + overlay.*   The click-through badge window that follows the mouse pointer
 └── input.cjs                 Windows mouse input via user32 (SetCursorPos, mouse_event); HG_DRY_RUN=1 logs instead
 tests/                        Synthetic-hand unit tests (vitest)
 scripts/                      Asset setup + end-to-end browser verification

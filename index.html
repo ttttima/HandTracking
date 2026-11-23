@@ -34,6 +34,12 @@
           <img id="image" alt="" hidden />
           <canvas id="air-canvas" class="layer"></canvas>
           <canvas id="overlay" class="layer"></canvas>
+          <div class="calib" id="calib" hidden role="status" aria-live="polite">
+            <p class="calib-title" id="calib-title">Get ready</p>
+            <p class="calib-text" id="calib-text"></p>
+            <div class="calib-bar"><span id="calib-bar"></span></div>
+            <button class="btn quiet light small" id="btn-calib-cancel">Cancel</button>
+          </div>
           <div class="stage-empty" id="stage-empty">
             <h2 id="empty-title">Loading the hand model</h2>
             <p id="empty-text">This takes a few seconds the first time.</p>
@@ -103,7 +109,13 @@
             <label for="control-margin"><span>Reach</span><output id="control-margin-out"></output></label>
             <input type="range" id="control-margin" min="0.05" max="0.35" step="0.01" />
             <small>The part of the picture that covers your whole screen. Smaller means less arm movement.</small>
+            <div class="reach-actions">
+              <button class="btn quiet small" id="btn-calibrate">Calibrate reach</button>
+              <button class="btn quiet small" id="btn-calibrate-reset" hidden>Use the slider again</button>
+            </div>
+            <small>Calibrate: sweep your hand over the area that feels comfortable for a few seconds; that area then covers the screen.</small>
           </div>
+          <label class="check"><input type="checkbox" id="control-overlay" /> Show what your hand is doing next to the mouse pointer</label>
           <div class="set-field">
             <label for="control-smoothing"><span>Pointer</span><output id="control-smoothing-out"></output></label>
             <input type="range" id="control-smoothing" min="0.3" max="4" step="0.1" />

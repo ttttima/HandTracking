@@ -14,7 +14,7 @@ import { loadEnabledGestures, loadThresholds } from './config';
 import { loadSnapping } from './control/angleSnap';
 import { BIND_TARGETS, keybinds, loadKeybinds } from './control/keybinds';
 
-/** "hold a fist" style description of the gesture bound to pause, or null if none is. */
+/** "hold a fist" style description of the gesture bound to turning control on / off, or null if none is. */
 function pauseGesture(): string | null {
   const t = BIND_TARGETS.find((x) => keybinds[x.id].action === 'pause_control');
   if (!t) return null;
@@ -22,6 +22,9 @@ function pauseGesture(): string | null {
   return keybinds[t.id].trigger === 'held' ? `hold ${name === 'fist' ? 'a fist' : name}` : `show ${name}`;
 }
 import { KeybindsPanel } from './ui/keybindsPanel';
+import { chime } from './ui/chime';
+import { CursorBadge } from './control/cursorBadge';
+import { ReachCalibrator, type FitResult } from './control/reachCalibration';
 import { HandDetector, type Backend } from './core/detector';
 import { CameraError, listCameras, openCamera, openMedia, type FrameSource } from './core/sources';
 import { EventBus } from './events/eventBus';
@@ -68,6 +71,11 @@ export class HandTrackingApp {
   private air = new AirCanvas($('air-canvas') as HTMLCanvasElement);
   /** Present only in the desktop app (Electron preload provides window.pcControl). */
   readonly control: PcController | null = window.pcControl ? new PcController(this.bus, window.pcControl) : null;
+  /** Desktop app: the status badge next to the mouse pointer. */
+  private badge: CursorBadge | null = window.pcControl ? new CursorBadge(this.bus, (s) => window.pcControl?.setOverlay(s)) : null;
+  /** Reach calibration in progress (Settings → PC control → Calibrate reach). */
+  private calib: ReachCalibrator | null = null;
+  private calibDone: ((r: FitResult | null) => void) | null = null;
   private video = $('video') as HTMLVideoElement;
   private image = $('image') as HTMLImageElement;
   private stage = $('stage');
@@ -257,6 +265,8 @@ export class HandTrackingApp {
   private stopSource() {
     this.stopFrameReader();
     this.control?.cancelPress();
+    this.calibDone?.(null);
+    this.badge?.hide();
     if (!this.source) return;
     this.source.stop();
     this.source = null;
@@ -338,7 +348,8 @@ export class HandTrackingApp {
       outline: this.flags.outline,
       landmarkIds: this.flags.ids,
       gestureLabels: this.flags.gestures,
-      control: this.control?.isOn ? this.control.view : null,
+      control: this.control?.isOn && !this.calib ? this.control.view : null,
+      calibration: this.calib?.view ?? null,
     }, now);
     this.air.draw();
     if (this.source) {
@@ -428,6 +439,15 @@ export class HandTrackingApp {
     }
     this.air.update(this.hands, this.flags.mirror, aspect);
     this.control?.update(this.hands, this.flags.mirror, now);
+    if (this.control && this.badge) {
+      if (this.calib) this.badge.hide(); // the picture shows what to do while calibrating
+      else this.badge.update(this.control.view, this.control.view.state, this.gestures, pauseGesture());
+    }
+    if (this.calib) {
+      const result = this.calib.feed(this.hands, this.flags.mirror, now);
+      this.showCalibration();
+      if (result) this.calibDone?.(result);
+    }
 
     // Metrics.
     this.latency = this.latency ? this.latency * 0.9 + frame.inferenceMs * 0.1 : frame.inferenceMs;
@@ -572,8 +592,13 @@ export class HandTrackingApp {
     screensSel.value = ctl.options.screens;
     screensSel.addEventListener('change', () => { ctl.options.screens = screensSel.value === 'all' ? 'all' : 'primary'; save(); void applyScreens(); });
     void applyScreens();
+    const calibrated = $('btn-calibrate-reset') as HTMLButtonElement;
     const showValues = () => {
-      $('control-margin-out').textContent = `${Math.round((1 - 2 * ctl.options.margin) * 100)}% of the picture`;
+      const box = ctl.options.box;
+      calibrated.hidden = !box;
+      $('control-margin-out').textContent = box
+        ? `Calibrated, ${Math.round((box.x1 - box.x0) * 100)}% × ${Math.round((box.y1 - box.y0) * 100)}% of the picture`
+        : `${Math.round((1 - 2 * ctl.options.margin) * 100)}% of the picture`;
       $('control-smoothing-out').textContent = ctl.options.smoothing <= 0.8 ? 'Steady' : ctl.options.smoothing >= 2.5 ? 'Snappy' : 'Balanced';
     };
     handSel.value = ctl.options.hand;
@@ -581,16 +606,27 @@ export class HandTrackingApp {
     smooth.value = String(ctl.options.smoothing);
     showValues();
     handSel.addEventListener('change', () => { ctl.options.hand = handSel.value as ControlOptions['hand']; save(); this.describeControl(); });
-    margin.addEventListener('input', () => { ctl.options.margin = Number(margin.value); showValues(); save(); });
+    // Moving the slider goes back to a centred box.
+    margin.addEventListener('input', () => { ctl.options.margin = Number(margin.value); ctl.options.box = null; showValues(); save(); });
+    calibrated.addEventListener('click', () => { ctl.options.box = null; showValues(); save(); });
+    $('btn-calibrate').addEventListener('click', () => this.calibrateReach(() => { showValues(); save(); }));
+    $('btn-calib-cancel').addEventListener('click', () => this.calibDone?.(null));
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && this.calib) this.calibDone?.(null); });
+    const badgeBox = $('control-overlay') as HTMLInputElement;
+    badgeBox.checked = ctl.options.badge !== false;
+    if (this.badge) this.badge.enabled = badgeBox.checked;
+    badgeBox.addEventListener('change', () => { ctl.options.badge = badgeBox.checked; if (this.badge) this.badge.enabled = badgeBox.checked; save(); });
     smooth.addEventListener('input', () => { ctl.options.smoothing = Number(smooth.value); showValues(); save(); });
     onTop.addEventListener('change', () => bridge.setAlwaysOnTop(onTop.checked));
 
     btn.addEventListener('click', () => ctl.toggle());
     bridge.onToggle(() => ctl.toggle());
     ctl.onChange = (_view, reason) => {
+      if (reason === 'Started' || reason === 'Resumed') chime(true);
+      else if (reason === 'Paused' || reason === 'Stopped') chime(false);
       if (reason === 'Started') {
         const pause = pauseGesture();
-        this.ui.toast(`Your ${ctl.options.hand.toLowerCase()} hand now moves the mouse. ${pause ? `To pause, ${pause}. ` : ''}Press ${this.controlShortcut} to stop.`, 'info', 6000);
+        this.ui.toast(`Your ${ctl.options.hand.toLowerCase()} hand now moves the mouse. ${pause ? `To turn it off, ${pause}. ` : ''}Press ${this.controlShortcut} to stop.`, 'info', 6000);
       }
       this.describeControl(reason);
     };
@@ -608,6 +644,53 @@ export class HandTrackingApp {
 
   private controlShortcut = 'Ctrl+Alt+H';
 
+  /** Settings → Calibrate reach: sweep the mouse hand over a comfortable area; it then covers the screen. */
+  private calibrateReach(saved: () => void) {
+    const ctl = this.control;
+    if (!ctl || this.calib) return;
+    if (this.source?.kind !== 'camera') {
+      this.ui.toast('Start the camera first, then calibrate.', 'error');
+      return;
+    }
+    this.settings.toggle(false);
+    const handName = `${ctl.options.hand.toLowerCase()} hand`;
+    this.calib = new ReachCalibrator(ctl.options.hand);
+    ctl.suspended = true; // nothing moves or clicks while you sweep
+    $('calib').hidden = false;
+    this.calibDone = (result) => {
+      this.calib = null;
+      this.calibDone = null;
+      ctl.suspended = false;
+      $('calib').hidden = true;
+      if (!result) return;
+      if (result.ok) {
+        ctl.options.box = result.box;
+        saved();
+        this.ui.toast(`Reach calibrated. The box on the picture is the area that now covers your screen.`, 'info', 5000);
+      } else if (result.reason === 'few') {
+        this.ui.toast(`Your ${handName} was not seen long enough. Keep it in the picture and try again.`, 'error', 6000);
+      } else {
+        this.ui.toast('That area is too small to aim precisely. Move your hand over a larger area and try again.', 'error', 6000);
+      }
+    };
+    this.calibHand = handName;
+    this.showCalibration();
+  }
+
+  private calibHand = 'right hand';
+
+  private showCalibration() {
+    const v = this.calib?.view;
+    if (!v) return;
+    $('calib-title').textContent = v.phase === 'ready' ? `Get ready… ${v.secondsLeft}` : `Sweep your hand… ${v.secondsLeft}`;
+    $('calib-text').textContent = !v.handSeen
+      ? `Show your ${this.calibHand} to the camera.`
+      : v.phase === 'ready'
+        ? `Hold up your ${this.calibHand}, the one that moves the mouse.`
+        : 'Move it slowly over the whole area you want to use, corners included, without stretching.';
+    ($('calib-bar').style.width = `${Math.round(v.progress * 100)}%`);
+  }
+
   private describeControl(reason = '') {
     const ctl = this.control;
     if (!ctl) return;
@@ -622,7 +705,7 @@ export class HandTrackingApp {
     const v = ctl.view;
     line.dataset.state = v.state;
     const what = v.state === 'paused'
-      ? `Paused. ${pauseGesture() ? `To resume, ${pauseGesture()}.` : `Press ${this.controlShortcut} to stop.`}`
+      ? `Off for now. ${pauseGesture() ? `To turn it back on, ${pauseGesture()}.` : `Press ${this.controlShortcut} to stop.`}`
       : `Your ${hand} moves the mouse.`;
     line.textContent = reason && !['Started', 'Resumed', 'Paused'].includes(reason) ? `${what} Last action: ${reason.toLowerCase()}.` : what;
   }

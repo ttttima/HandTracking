@@ -6,6 +6,7 @@
 import { FINGER_COLORS, GESTURE_META, HAND_COLORS, PALETTE } from '../config';
 import { FINGERS, FINGER_JOINTS, FINGERTIPS, LM, type HandFeatures, type HandGestureState } from '../types';
 import type { ControlView } from '../control/pcController';
+import type { CalibrationView } from '../control/reachCalibration';
 
 export interface RenderOptions {
   mirror: boolean;
@@ -15,6 +16,8 @@ export interface RenderOptions {
   gestureLabels: boolean;
   /** When PC control is on: the control box and pointer anchor to draw. */
   control?: ControlView | null;
+  /** While calibrating reach: the swept points and the area they cover so far. */
+  calibration?: CalibrationView | null;
 }
 
 interface Ripple { x: number; y: number; t0: number; color: string; big: boolean }
@@ -78,19 +81,20 @@ export class SkeletonRenderer {
       this.drawLabel(hand, opts.gestureLabels ? gestures.get(hand.id) : undefined, pts, palmPx, tint);
     }
     if (opts.control) this.drawControl(opts.control);
+    if (opts.calibration) this.drawCalibration(opts.calibration);
     this.drawRipples(now);
   }
 
   /** The part of the picture that maps to the screen, plus where the pointer is anchored. */
   private drawControl(c: ControlView) {
     const ctx = this.ctx;
-    const m = c.margin;
+    const r = c.rect;
     const tint = HAND_COLORS[c.hand] ?? PALETTE.bone;
     ctx.save();
     ctx.setLineDash(c.state === 'paused' ? [6 * this.dpr, 6 * this.dpr] : []);
     ctx.lineWidth = 2 * this.dpr;
     ctx.strokeStyle = c.state === 'paused' ? 'rgba(235, 231, 225, 0.5)' : tint;
-    ctx.strokeRect(m * this.w, m * this.h, (1 - 2 * m) * this.w, (1 - 2 * m) * this.h);
+    ctx.strokeRect(r.x0 * this.w, r.y0 * this.h, (r.x1 - r.x0) * this.w, (r.y1 - r.y0) * this.h);
     ctx.setLineDash([]);
     if (c.anchor && c.state === 'active') {
       const x = c.anchor.x * this.w;
@@ -109,6 +113,25 @@ export class SkeletonRenderer {
       ctx.moveTo(x, y - r * 1.8); ctx.lineTo(x, y - r * 0.6);
       ctx.moveTo(x, y + r * 0.6); ctx.lineTo(x, y + r * 1.8);
       ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  private drawCalibration(c: CalibrationView) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.fillStyle = 'rgba(235, 231, 225, 0.55)';
+    for (const p of c.points) {
+      ctx.beginPath();
+      ctx.arc(p.x * this.w, p.y * this.h, 2.5 * this.dpr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (c.rect) {
+      const r = c.rect;
+      ctx.setLineDash([8 * this.dpr, 6 * this.dpr]);
+      ctx.lineWidth = 2 * this.dpr;
+      ctx.strokeStyle = PALETTE.bone;
+      ctx.strokeRect(r.x0 * this.w, r.y0 * this.h, (r.x1 - r.x0) * this.w, (r.y1 - r.y0) * this.h);
     }
     ctx.restore();
   }

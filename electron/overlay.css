@@ -1,0 +1,29 @@
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; user-select: none; }
+body {
+  font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --bone: #ebe7e1; --muted: #c9c1b7; --film: rgba(34, 30, 27, 0.92);
+}
+.badge {
+  --tint: #d9a58c;
+  display: inline-flex; align-items: center; gap: 9px; max-width: calc(100% - 4px); box-sizing: border-box;
+  margin: 2px; padding: 6px 14px 6px 7px; border-radius: 26px;
+  background: var(--film); color: var(--bone);
+  opacity: 0; transform: translateY(-3px); transition: opacity 0.16s ease, transform 0.16s ease;
+}
+.badge[data-hand='Left'] { --tint: #9fb3bb; }
+.badge.show { opacity: 1; transform: none; }
+.ring { width: 34px; height: 34px; flex: none; transform: rotate(-90deg); }
+.ring circle { fill: none; stroke-width: 3.5; }
+.ring .track { stroke: rgba(235, 231, 225, 0.16); }
+.ring .fill { stroke: var(--tint); stroke-linecap: round; stroke-dasharray: 87.96; stroke-dashoffset: 87.96; transition: stroke-dashoffset 0.07s linear; }
+.ring .dot { fill: transparent; stroke: none; }
+.badge[data-tone='drag'] .dot, .badge[data-tone='on'] .dot { fill: var(--tint); }
+.badge[data-tone='off'] .fill { stroke: var(--muted); }
+.badge[data-tone='off'] .dot { fill: none; stroke: var(--muted); stroke-width: 2; }
+.badge.no-ring .ring { display: none; }
+.badge.no-ring { padding-left: 14px; }
+.text { min-width: 0; padding: 2px 0; }
+.title { font-size: 14px; font-weight: 650; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.detail { font-size: 12px; color: var(--muted); line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.detail:empty { display: none; }
+@media (prefers-reduced-motion: reduce) { .badge, .ring .fill { transition: none; } }

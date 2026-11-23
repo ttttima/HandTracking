@@ -17,6 +17,8 @@ const input = require('./input.cjs');
 const apps = require('./apps.cjs');
 const desktops = require('./desktops.cjs');
 const settingsFile = require('./settingsFile.cjs');
+const overlay = require('./overlay.cjs');
+globalThis.__hgOverlay = overlay.current; // for scripts/verify-desktop.mjs
 
 const DEV_URL = process.env.VITE_DEV_SERVER_URL || '';
 const START_QUERY = process.env.HG_START_QUERY ? `?${process.env.HG_START_QUERY}` : '';
@@ -49,6 +51,7 @@ if (process.env.HG_USER_DATA) app.setPath('userData', process.env.HG_USER_DATA);
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required'); // the on/off sound plays without a click first
 if (!app.requestSingleInstanceLock()) app.quit();
 
 let win = null;
@@ -94,6 +97,7 @@ function createWindow() {
   win.once('ready-to-show', () => win.show());
   win.on('closed', () => {
     input.releaseAll();
+    overlay.destroy();
     win = null;
   });
   win.webContents.on('render-process-gone', () => input.releaseAll());
@@ -132,7 +136,10 @@ function registerIpc() {
   });
   ipcMain.handle('settings:path', guard(() => settingsFile.filePath()));
   ipcMain.on('settings:reveal', guard(() => shell.showItemInFolder(settingsFile.filePath())));
-  ipcMain.on('desktop:switch', guard((which) => { void desktops.switchDesktop(which); }));
+  ipcMain.on('desktop:switch', guard((which) => {
+    void desktops.switchDesktop(which).then(() => setTimeout(overlay.reattach, 450));
+  }));
+  ipcMain.on('overlay:update', guard((state) => overlay.update(state)));
   ipcMain.handle('apps:list', guard(() => apps.listApps()));
   ipcMain.handle('apps:pick', guard(() => apps.pickProgram(win)));
   ipcMain.on('apps:open', guard((app) => { void apps.openApp(app); }));

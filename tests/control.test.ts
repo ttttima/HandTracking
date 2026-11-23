@@ -175,6 +175,25 @@ describe('PC control', () => {
     expect(r.calls).toEqual([]);
   });
 
+  it('holding a fist turns control on even when it was stopped, and off again', () => {
+    const r = rig();
+    expect(r.ctl.view.state).toBe('off');
+    r.play(POSES.fist, r.t.holdMs + 300);
+    expect(r.ctl.view.state).toBe('active');
+    r.play(POINT, 600);
+    expect(r.moves.length).toBeGreaterThan(0);
+    r.play(POSES.fist, r.t.holdMs + 300);
+    expect(r.ctl.view.state).toBe('paused');
+  });
+
+  it('keeping the fist held does not flip control back and forth', () => {
+    const r = rig();
+    r.ctl.start();
+    r.play(POINT, 300);
+    r.play(POSES.fist, r.t.holdMs * 4);
+    expect(r.ctl.view.state).toBe('paused');
+  });
+
   it('holding a fist pauses, holding it again resumes', () => {
     const r = rig();
     r.ctl.start();
@@ -300,6 +319,7 @@ describe('keybinds', () => {
       }));
       loadKeybinds();
       expect(keybinds.swipe_left.action).toBe('desktop_second');
+      expect(keybinds.fist).toEqual({ action: 'pause_control', trigger: 'held' });
       expect(keybinds.swipe_right.action).toBe('keys');
       expect(keybinds.peace.action).toBe('none');
       // Once upgraded, clearing it again sticks.
@@ -308,6 +328,29 @@ describe('keybinds', () => {
       saveKeybinds();
       loadKeybinds();
       expect(keybinds.swipe_left.action).toBe('none');
+    } finally {
+      (globalThis as { localStorage?: unknown }).localStorage = prev;
+      resetKeybinds();
+    }
+  });
+
+  it('revision 2 binds with the fist set to Nothing get the on/off sign back', async () => {
+    const { keybinds, loadKeybinds, resetKeybinds } = await import('../src/control/keybinds');
+    const store = new Map<string, string>();
+    const prev = (globalThis as { localStorage?: unknown }).localStorage;
+    (globalThis as { localStorage?: unknown }).localStorage = {
+      getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => { store.set(k, v); },
+    };
+    try {
+      store.set('handgestures.keybinds.v1', JSON.stringify({
+        fist: { action: 'none', trigger: 'held' },
+        swipe_left: { action: 'none', trigger: 'made' },
+        revision: 2,
+      }));
+      loadKeybinds();
+      expect(keybinds.fist).toEqual({ action: 'pause_control', trigger: 'held' });
+      expect(keybinds.swipe_left.action).toBe('none'); // already chosen at revision 2
+      expect(JSON.parse(store.get('handgestures.keybinds.v1')!).revision).toBe(3);
     } finally {
       (globalThis as { localStorage?: unknown }).localStorage = prev;
       resetKeybinds();
