@@ -98,8 +98,39 @@ describe('PC control', () => {
     r.play(OPEN_PINCH, 400);
     r.play(PINCH, r.t.dragHoldMs + 300);
     expect(r.ctl.view.dragging).toBe(true);
-    r.play(OPEN_PINCH, 300);
+    r.play(OPEN_PINCH, r.t.dragDropMs + 300);
     expect(r.actions()).toEqual(['left:down', 'left:up']);
+  });
+
+  it('a drag survives brief tracking dropouts (pinch or hand gone for a moment)', () => {
+    const r = rig();
+    r.ctl.start();
+    r.play(OPEN_PINCH, 400);
+    r.play(PINCH, r.t.dragHoldMs + 200);
+    expect(r.ctl.view.dragging).toBe(true);
+    r.play(OPEN_PINCH, 150); // pinch flickers off
+    r.play(PINCH, 300);
+    r.play(null, 250); // hand lost for a moment
+    r.play(PINCH, 300);
+    expect(r.ctl.view.dragging).toBe(true);
+    expect(r.actions()).toEqual(['left:down']);
+    // A real release still drops, about dragDropMs later.
+    r.play(OPEN_PINCH, r.t.dragDropMs - 150);
+    expect(r.ctl.view.dragging).toBe(true);
+    r.play(OPEN_PINCH, 400);
+    expect(r.ctl.view.dragging).toBe(false);
+    expect(r.actions()).toEqual(['left:down', 'left:up']);
+  });
+
+  it('a one-frame pinch dropout while pressing does not click and restart', () => {
+    const r = rig();
+    r.ctl.start();
+    r.play(OPEN_PINCH, 400);
+    r.play(PINCH, 250);
+    r.play(OPEN_PINCH, 40);
+    r.play(PINCH, r.t.dragHoldMs);
+    expect(r.ctl.view.dragging).toBe(true);
+    expect(r.actions()).toEqual(['left:down']);
   });
 
   it('peace sign = right click', () => {
@@ -142,7 +173,7 @@ describe('PC control', () => {
     r.ctl.start();
     r.play(OPEN_PINCH, 400);
     r.play(PINCH, r.t.dragHoldMs + 200);
-    r.play(null, 400);
+    r.play(null, r.t.dragDropMs + 300);
     expect(r.actions()).toEqual(['left:down', 'left:up']);
   });
 

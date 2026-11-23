@@ -87,6 +87,11 @@ export interface Thresholds {
   // ── Temporal gestures ──────────────────────────────────────────────────────
   /** Hold a thumb–index touch this long to start a drag. */
   dragHoldMs: number;
+  /**
+   * While dragging, the pinch must be gone this long before the drag drops. Tracking can lose the
+   * pinch (or the whole hand) for a few frames; that must not let go of what you are holding.
+   */
+  dragDropMs: number;
   /** Hold a static gesture this long to fire a `gesture:hold` event (e.g. OK hold). */
   holdMs: number;
   /** Swipe: minimum travel in palm sizes within the window. */
@@ -129,6 +134,7 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
   fingersSpreadDeg: 10,
 
   dragHoldMs: 480,
+  dragDropMs: 500,
   holdMs: 900,
   swipeMinDistance: 1.6,
   swipeMinSpeed: 5,
@@ -172,6 +178,7 @@ export const THRESHOLD_GROUPS: { title: string; fields: ThresholdField[] }[] = [
       { key: 'pinchFull', label: 'Pinch 100% at', min: 0.05, max: 0.5, step: 0.01, unit: '×palm', help: 'Thumb–index distance giving full pinch strength.' },
       { key: 'fingersTogetherDeg', label: 'Fingers together under', min: 1, max: 20, step: 0.5, unit: '°', help: 'Average angle between neighbouring fingers below which a flat hand is a closed palm.' },
       { key: 'fingersSpreadDeg', label: 'Fingers spread over', min: 3, max: 30, step: 0.5, unit: '°', help: 'Average angle between neighbouring fingers above which a flat hand is an open palm.' },
+      { key: 'dragDropMs', label: 'Drop drag after', min: 0, max: 1500, step: 50, unit: 'ms', help: 'While dragging with a pinch, let go only once the pinch has been gone this long. Brief tracking dropouts are ignored.' },
       { key: 'pinchNone', label: 'Pinch 0% at', min: 0.2, max: 1.2, step: 0.01, unit: '×palm', help: 'Thumb–index distance where pinch strength reaches zero.' },
     ],
   },

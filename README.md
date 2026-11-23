@@ -58,7 +58,7 @@ Control is **off** until you click **Control my PC**. Then one hand (right by de
 | --- | --- |
 | Move your hand | Move the pointer (it follows your knuckles, so pinching doesn't nudge it) |
 | Quick pinch (thumb + index, let go) | Left click; two quick pinches double-click |
-| Pinch and hold, move, let go | Drag and drop |
+| Pinch and hold, move, let go | Drag and drop. If tracking loses the pinch or your hand for a moment, the drag keeps holding; it drops once the pinch has been gone for 500 ms (**Settings → Sensitivity → Drop drag after**) |
 | Any other gesture | Whatever you set in **Keybinds** (see below) |
 | **Ctrl+Alt+H** (works from any app) | Turn control off or on |
 

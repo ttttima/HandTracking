@@ -252,6 +252,7 @@ export class HandTrackingApp {
 
   private stopSource() {
     this.stopFrameReader();
+    this.control?.cancelPress();
     if (!this.source) return;
     this.source.stop();
     this.source = null;

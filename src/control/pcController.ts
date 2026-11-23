@@ -58,6 +58,8 @@ export interface ControlView {
 }
 
 const CLICK_MAX_MS = 420;
+/** Before a drag starts, a pinch that vanishes for less than this is a tracking blip, not a release. */
+const PRESS_GRACE_MS = 100;
 /** Pointer stays put this long around a pinch so the click lands where you aimed. */
 const SETTLE_MS = 140;
 const SCROLL_NOTCHES = 4;
@@ -93,6 +95,8 @@ export class PcController {
   private fx = new OneEuroFilter(1.2, 10);
   private fy = new OneEuroFilter(1.2, 10);
   private touchStart = -1;
+  /** When the pinch (or the hand) was last seen going away during a press, or -1. */
+  private lostSince = -1;
   private dragging = false;
   private settleUntil = 0;
   private lastFired = new Map<BindTarget, number>();
@@ -117,8 +121,9 @@ export class PcController {
       if (gesture !== 'pinch') this.runBind(gesture as BindTarget, 'held');
     });
     bus.on('swipe', ({ direction }) => this.runBind(`swipe_${direction}` as BindTarget, 'made'));
+    // Losing the hand mid-drag starts the drop timer in update(); it does not drop at once.
     bus.on('hand:lost', ({ hand }) => {
-      if (hand === this.controlId) this.releaseDrag();
+      if (hand === this.controlId && this.dragging && this.lostSince < 0) this.lostSince = this.frameNow;
     });
   }
 
@@ -146,6 +151,7 @@ export class PcController {
   private setState(next: ControlState, reason: string) {
     if (next !== 'active') this.releaseDrag();
     this.touchStart = -1;
+    this.lostSince = -1;
     this.state = next;
     if (next === 'off') {
       this.anchor = null;
@@ -158,7 +164,15 @@ export class PcController {
     this.onChange?.(this.view, reason);
   }
 
+  /** Let go of any press now (the camera stopped, so no more frames will come). */
+  cancelPress(): void {
+    this.releaseDrag();
+    this.touchStart = -1;
+    this.lostSince = -1;
+  }
+
   private releaseDrag() {
+    this.lostSince = -1;
     if (this.dragging) {
       this.dragging = false;
       this.bridge.button('left', false);
@@ -207,8 +221,15 @@ export class PcController {
     if (!hand) {
       this.controlId = null;
       this.anchor = null;
+      // Mid-drag, keep holding through a short tracking dropout; drop only after dragDropMs.
+      if (this.dragging) {
+        if (this.lostSince < 0) this.lostSince = now;
+        if (now - this.lostSince < this.t.dragDropMs) return;
+        this.releaseDrag();
+        this.emit('Drop');
+      }
       this.touchStart = -1;
-      this.releaseDrag();
+      this.lostSince = -1;
       this.snapper.reset();
       return;
     }
@@ -232,7 +253,8 @@ export class PcController {
     for (const p of trail) { lo = Math.min(lo, p.v); hi = Math.max(hi, p.v); }
     const handMoving = hi - lo > HAND_MOVING_RANGE;
     const reachOk = hand.indexReach >= this.t.pinchMinIndexReach - 0.1;
-    if (contact && (!reachOk || handMoving)) {
+    // (Once a drag is under way it is never cut off this way: only letting go drops it.)
+    if (contact && (!reachOk || handMoving) && !this.dragging) {
       if (this.touchStart >= 0) {
         this.releaseDrag();
         this.touchStart = -1;
@@ -243,24 +265,34 @@ export class PcController {
       this.pinchBlocked = false;
     }
     const touching = contact && !this.pinchBlocked && isEnabled('pinch');
-    if (touching && this.touchStart < 0) {
-      this.touchStart = now;
-    } else if (touching && !this.dragging && now - this.touchStart >= this.t.dragHoldMs) {
-      this.dragging = true;
-      this.bridge.button('left', true);
-      this.snapper.reset(); // a drag starts a fresh straight line
-      this.emit('Drag');
-    } else if (!touching && this.touchStart >= 0 && !this.pinchBlocked) {
-      if (this.dragging) {
-        this.releaseDrag();
-        this.snapper.reset();
-        this.emit('Drop');
-      } else if (now - this.touchStart <= CLICK_MAX_MS && !handMoving) {
-        this.bridge.click('left');
-        this.emit('Click');
+    if (touching) {
+      this.lostSince = -1;
+      if (this.touchStart < 0) {
+        this.touchStart = now;
+      } else if (!this.dragging && now - this.touchStart >= this.t.dragHoldMs) {
+        this.dragging = true;
+        this.bridge.button('left', true);
+        this.snapper.reset(); // a drag starts a fresh straight line
+        this.emit('Drag');
       }
-      this.touchStart = -1;
-      this.settleUntil = now + SETTLE_MS;
+    } else if (this.touchStart >= 0 && (!this.pinchBlocked || this.dragging)) {
+      // The pinch is gone. Wait a moment before believing it: tracking often loses it for a frame
+      // or two, and dropping a dragged window by accident is much worse than a slightly late drop.
+      if (this.lostSince < 0) this.lostSince = now;
+      const grace = this.dragging ? this.t.dragDropMs : PRESS_GRACE_MS;
+      if (now - this.lostSince >= grace) {
+        if (this.dragging) {
+          this.releaseDrag();
+          this.snapper.reset();
+          this.emit('Drop');
+        } else if (this.lostSince - this.touchStart <= CLICK_MAX_MS && !handMoving) {
+          this.bridge.click('left');
+          this.emit('Click');
+        }
+        this.touchStart = -1;
+        this.lostSince = -1;
+        this.settleUntil = now + SETTLE_MS;
+      }
     }
 
     // ── Pointer ──────────────────────────────────────────────────────────
@@ -275,7 +307,7 @@ export class PcController {
     else this.snapper.reset();
 
     // Hold still while a pinch is starting or just released, so clicks land where you aimed.
-    const settling = (touching && !this.dragging && now - this.touchStart < CLICK_MAX_MS) || now < this.settleUntil;
+    const settling = (this.touchStart >= 0 && !this.dragging && now - this.touchStart < CLICK_MAX_MS) || now < this.settleUntil;
     if (settling) return;
     if (this.lastSent && Math.abs(this.lastSent.x - sx) < 0.0004 && Math.abs(this.lastSent.y - sy) < 0.0004) return;
     this.lastSent = { x: sx, y: sy };
