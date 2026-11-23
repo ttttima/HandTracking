@@ -233,7 +233,14 @@ export class GestureEngine {
       const ddy = last.y - first.y;
       const major = Math.max(Math.abs(ddx), Math.abs(ddy));
       const minor = Math.min(Math.abs(ddx), Math.abs(ddy));
-      if (dt > 0.05 && major >= t.swipeMinDistance && major / dt >= t.swipeMinSpeed && major > 2 * minor) {
+      // A tracking jump (the hand "teleporting" in one frame) is not a swipe: real motion is spread over frames.
+      const horizontal = Math.abs(ddx) >= Math.abs(ddy);
+      let maxStep = 0;
+      for (let i = 1; i < trail.length; i++) {
+        maxStep = Math.max(maxStep, Math.abs(horizontal ? trail[i].x - trail[i - 1].x : trail[i].y - trail[i - 1].y));
+      }
+      const smooth = maxStep <= 0.7 * major;
+      if (dt > 0.05 && major >= t.swipeMinDistance && major / dt >= t.swipeMinSpeed && major > 2 * minor && smooth) {
         const direction = Math.abs(ddx) > Math.abs(ddy) ? (ddx > 0 ? 'right' : 'left') : ddy > 0 ? 'down' : 'up';
         track.lastSwipeAt = now;
         trail.length = 0;

@@ -75,6 +75,29 @@ describe('gesture engine', () => {
     expect(swipes[0].payload.direction).toBe('right');
   });
 
+  it('a short quick flick is enough for a swipe', () => {
+    const r = rig();
+    // About 0.7 palm sizes in ~130 ms.
+    for (let i = 0; i <= 4; i++) r.play({ ...POSES.open_palm, at: { x: 0.5 - i * 0.026, y: 0.5 } }, FRAME);
+    const swipes = r.events.filter((e) => e.name === 'swipe');
+    expect(swipes).toHaveLength(1);
+    expect(swipes[0].payload.direction).toBe('right');
+  });
+
+  it('small hand drift is not a swipe', () => {
+    const r = rig();
+    // About 0.35 palm sizes, quickly: below the swipe distance.
+    for (let i = 0; i <= 4; i++) r.play({ ...POSES.open_palm, at: { x: 0.5 - i * 0.013, y: 0.5 } }, FRAME);
+    expect(r.names()).not.toContain('swipe');
+  });
+
+  it('a one-frame tracking jump is not a swipe', () => {
+    const r = rig();
+    r.play({ ...POSES.open_palm, at: { x: 0.5, y: 0.5 } }, 300);
+    r.play({ ...POSES.open_palm, at: { x: 0.5, y: 0.8 } }, 300);
+    expect(r.names()).not.toContain('swipe');
+  });
+
   it('slow motion is not a swipe', () => {
     const r = rig();
     for (let i = 0; i <= 60; i++) r.play({ ...POSES.open_palm, at: { x: 0.7 - i * 0.008, y: 0.5 } }, FRAME);
