@@ -4,6 +4,7 @@ import {
 } from '../config';
 import { $, el } from './dom';
 import { saveSnapping, snapping } from '../control/angleSnap';
+import { THRESHOLDS_CHANGED } from './swipeSlider';
 
 export class SettingsPanel {
   private drawer = $('settings');
@@ -33,6 +34,7 @@ export class SettingsPanel {
         input.addEventListener('input', () => {
           thresholds[f.key] = Number(input.value);
           this.renderValue(f.key);
+          window.dispatchEvent(new CustomEvent(THRESHOLDS_CHANGED, { detail: f.key }));
           window.clearTimeout(this.saveTimer);
           this.saveTimer = window.setTimeout(saveThresholds, 250);
         });
@@ -48,6 +50,14 @@ export class SettingsPanel {
     snapOn.addEventListener('change', () => { snapping.enabled = snapOn.checked; saveSnapping(); });
     snapStep.addEventListener('change', () => { snapping.increment = Number(snapStep.value); saveSnapping(); });
     this.refresh();
+    // Another slider (e.g. Swipe distance under the picture) changed a value.
+    window.addEventListener(THRESHOLDS_CHANGED, (e) => {
+      const key = (e as CustomEvent<string>).detail;
+      const i = this.inputs.get(key);
+      if (!i || document.activeElement === i.input) return;
+      i.input.value = String(thresholds[key as keyof typeof thresholds]);
+      this.renderValue(key);
+    });
 
     this.button.addEventListener('click', () => this.toggle());
     $('btn-close-settings').addEventListener('click', () => this.toggle(false));
@@ -56,6 +66,7 @@ export class SettingsPanel {
     $('btn-reset').addEventListener('click', () => {
       resetThresholds();
       this.refresh();
+      window.dispatchEvent(new CustomEvent(THRESHOLDS_CHANGED, { detail: '*' }));
     });
   }
 

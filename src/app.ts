@@ -32,6 +32,7 @@ import type { HandFeatures, HandGestureState } from './types';
 import { Dashboard } from './ui/dashboard';
 import { $ } from './ui/dom';
 import { SettingsPanel } from './ui/settingsPanel';
+import { SwipeSlider } from './ui/swipeSlider';
 import { PcController, type ControlOptions } from './control/pcController';
 
 const CONTROL_STORAGE = 'handgestures.control.v1';
@@ -62,6 +63,7 @@ export class HandTrackingApp {
   readonly actions = new ActionMapper(this.bus);
   readonly ui = new Dashboard();
   private settings = new SettingsPanel();
+  private swipeSlider = new SwipeSlider();
   private renderer = new SkeletonRenderer($('overlay') as HTMLCanvasElement);
   private air = new AirCanvas($('air-canvas') as HTMLCanvasElement);
   /** Present only in the desktop app (Electron preload provides window.pcControl). */
@@ -103,6 +105,7 @@ export class HandTrackingApp {
     loadSnapping();
     loadKeybinds();
     this.settings.refresh();
+    this.swipeSlider.refresh();
     this.restoreFlags();
     this.bindControls();
     this.bindEvents();
@@ -242,6 +245,7 @@ export class HandTrackingApp {
     this.lastVideoTime = -1;
     this.frameSize = { w: src.width, h: src.height };
     this.stage.style.setProperty('--ar', String(src.width / Math.max(1, src.height)));
+    document.getElementById('tune')?.style.setProperty('--ar', String(src.width / Math.max(1, src.height)));
     this.video.hidden = src.kind === 'image';
     this.image.hidden = src.kind !== 'image';
     this.ui.setEmpty(null);

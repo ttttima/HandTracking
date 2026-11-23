@@ -159,7 +159,7 @@ Finger state comes from **joint bend angles** in 3-D, so it is independent of ha
 | 👍 Thumbs up / 👎 down | only the thumb extended **and** pointing up / down in the image |
 | Drag | thumb–index touch held > 480 ms → `drag:start` / `drag:move` / `drag:end` |
 | Hold | any gesture held for 900 ms → `gesture:hold` (e.g. "hold thumbs up to confirm") |
-| Swipe | fast palm movement (≥ 0.6 palm sizes at ≥ 4 palm/s; **Settings → Sensitivity → Swipe distance**) with ≥ 3 fingers out → left/right/up/down |
+| Swipe | fast palm movement (≥ 0.6 palm sizes at ≥ 4 palm/s; set the distance with the **Swipe distance** slider under the picture) with ≥ 3 fingers out → left/right/up/down |
 
 **Finger interactions:** every fingertip pair is tracked with hysteresis: *touching*
 (< 0.25 × palm, released at 0.33), *near* (< 0.55) or *apart*. Each transition fires an event

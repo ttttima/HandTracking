@@ -44,6 +44,12 @@
           </div>
         </div>
 
+        <div class="tune" id="tune">
+          <label for="swipe-distance">Swipe distance</label>
+          <input type="range" id="swipe-distance" min="0.2" max="3" step="0.05" aria-describedby="swipe-distance-hint" />
+          <output id="swipe-distance-out" for="swipe-distance"></output>
+          <small id="swipe-distance-hint">How far your palm has to move for a swipe action. Left is a small flick, right is a long sweep.</small>
+        </div>
         <section class="hand" id="hand-right" data-side="Right" data-present="false" aria-label="Right hand">
           <h2 class="hand-name"><i class="swatch" aria-hidden="true"></i>Right hand</h2>
           <p class="sign" data-role="sign">Not in view</p>

@@ -70,21 +70,34 @@ kbd { font: inherit; font-weight: 600; padding: 0 5px; border: 1px solid var(--r
 
 /* ── Layout: left hand | picture | right hand ─────────────────────────── */
 .layout {
-  flex: 1; display: grid; align-items: start; gap: 28px;
+  flex: 1; display: grid; align-items: start; align-content: start; gap: 28px;
   grid-template-columns: minmax(220px, 1fr) minmax(0, 3.4fr) minmax(220px, 1fr);
-  grid-template-areas: 'left stage right';
+  grid-template-areas: 'left stage right' '. tune .';
 }
 /* Without mirroring the camera shows your left hand on the right, so the panels follow it. */
-.layout.unmirrored { grid-template-areas: 'right stage left'; }
+.layout.unmirrored { grid-template-areas: 'right stage left' '. tune .'; }
+#hand-left { grid-row: 1 / span 2; }
+#hand-right { grid-row: 1 / span 2; }
 #hand-left { grid-area: left; }
 #hand-right { grid-area: right; }
 .stage { grid-area: stage; }
+
+/* ── Swipe distance, under the picture ─────────────────────────────────── */
+.tune {
+  grid-area: tune; justify-self: center; width: min(100%, calc((100vh - 185px) * var(--ar, 1.7778)));
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; column-gap: 14px; row-gap: 2px;
+  margin-top: -14px;
+}
+.tune label { font-weight: 600; }
+.tune input { width: 100%; accent-color: var(--soot); margin: 0; }
+.tune output { min-width: 6.5ch; text-align: right; font-weight: 600; }
+.tune small { grid-column: 1 / -1; color: var(--ink-2); font-size: 12.5px; }
 
 /* ── Picture ───────────────────────────────────────────────────────────── */
 .stage {
   --ar: 1.7778;
   position: relative; justify-self: center;
-  width: min(100%, calc((100vh - 120px) * var(--ar))); aspect-ratio: var(--ar);
+  width: min(100%, calc((100vh - 185px) * var(--ar))); aspect-ratio: var(--ar);
   border-radius: 12px; overflow: hidden; background: var(--film);
 }
 .stage video, .stage img, .stage .layer { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -181,8 +194,10 @@ kbd { font: inherit; font-weight: 600; padding: 0 5px; border: 1px solid var(--r
 
 /* ── Smaller screens: picture on top, both hands side by side below ────── */
 @media (max-width: 1100px) {
-  .layout { grid-template-columns: 1fr 1fr; grid-template-areas: 'stage stage' 'left right'; }
-  .layout.unmirrored { grid-template-areas: 'stage stage' 'right left'; }
+  .layout { grid-template-columns: 1fr 1fr; grid-template-areas: 'stage stage' 'tune tune' 'left right'; }
+  .layout.unmirrored { grid-template-areas: 'stage stage' 'tune tune' 'right left'; }
+  #hand-left, #hand-right { grid-row: auto; }
+  .tune { width: min(100%, calc((100vh - 300px) * var(--ar, 1.7778))); }
   .stage { width: min(100%, calc((100vh - 300px) * var(--ar))); }
 }
 @media (max-width: 640px) {
