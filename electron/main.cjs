@@ -16,6 +16,7 @@ const path = require('node:path');
 const input = require('./input.cjs');
 const apps = require('./apps.cjs');
 const desktops = require('./desktops.cjs');
+const settingsFile = require('./settingsFile.cjs');
 
 const DEV_URL = process.env.VITE_DEV_SERVER_URL || '';
 const START_QUERY = process.env.HG_START_QUERY ? `?${process.env.HG_START_QUERY}` : '';
@@ -120,6 +121,16 @@ function registerIpc() {
   ipcMain.on('window:minimize-foreground', guard(() => input.minimizeForeground()));
   ipcMain.on('window:toggle-desktop', guard(() => input.toggleDesktop()));
   ipcMain.on('input:keys', guard((combo) => input.sendKeys(combo)));
+  // Settings file: read synchronously at start-up (before the page loads any setting).
+  ipcMain.on('settings:read', (event) => {
+    event.returnValue = event.senderFrame && isOurPage(event.senderFrame.url) ? settingsFile.read() : null;
+  });
+  ipcMain.on('settings:write', guard((settings) => { settingsFile.write(settings); }));
+  ipcMain.on('settings:write-now', (event, settings) => {
+    event.returnValue = event.senderFrame && isOurPage(event.senderFrame.url) ? settingsFile.write(settings) : false;
+  });
+  ipcMain.handle('settings:path', guard(() => settingsFile.filePath()));
+  ipcMain.on('settings:reveal', guard(() => shell.showItemInFolder(settingsFile.filePath())));
   ipcMain.on('desktop:switch', guard((which) => { void desktops.switchDesktop(which); }));
   ipcMain.handle('apps:list', guard(() => apps.listApps()));
   ipcMain.handle('apps:pick', guard(() => apps.pickProgram(win)));

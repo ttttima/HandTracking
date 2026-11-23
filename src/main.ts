@@ -1,7 +1,10 @@
 import '@fontsource-variable/archivo/wdth.css';
 import './styles.css';
 import { HandTrackingApp } from './app';
+import { useSettingsFile, type SettingsFileBridge } from './settingsFile';
 
+// Desktop app: settings and keybinds live in a file; load it before anything reads a setting.
+useSettingsFile(window.pcControl?.settingsFile);
 const app = new HandTrackingApp();
 
 declare global {
@@ -13,6 +16,7 @@ declare global {
       onToggle(cb: () => void): () => void;
       listApps(): Promise<{ name: string; id: string }[]>;
       pickProgram(): Promise<{ path: string; name: string } | null>;
+      settingsFile: SettingsFileBridge;
     };
     /** Debug / automation hook: `handGestures.snapshot()` in the dev-tools console. */
     handGestures: { app: HandTrackingApp; snapshot: () => ReturnType<HandTrackingApp['snapshot']> };

@@ -20,7 +20,8 @@
     "desktop:start": "npm run build && electron .",
     "desktop:dist": "npm run build && electron-builder --win portable --x64",
     "verify:desktop": "npm run build && node scripts/verify-desktop.mjs",
-    "verify:background": "npm run build && node scripts/verify-background.mjs"
+    "verify:background": "npm run build && node scripts/verify-background.mjs",
+    "verify:settings": "npm run build && node scripts/verify-settings.mjs"
   },
   "dependencies": {
     "koffi": "3.3.7"

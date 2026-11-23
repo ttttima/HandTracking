@@ -44,6 +44,7 @@ may warn the first time because the file is not code-signed; choose *More info �
 | `npm start` | Browser version only (no PC control) on http://localhost:5173 |
 | `npm test` | Unit tests: fingers, signs, drag/swipe, and the PC controller |
 | `npm run verify` | Browser end-to-end checks: real hand photos, webcam path via a fake camera, permission errors |
+| `npm run verify:settings` | Settings survive a restart: change keybinds and settings, close, wipe Chromium storage, reopen |
 | `npm run verify:desktop` | Desktop end-to-end checks in **dry-run** mode (mouse actions are logged, never performed). Add `-- --packaged` after `desktop:dist` to test the `.exe` |
 | `npm run verify:background` | Checks tracking keeps full speed while the desktop app is minimised |
 | `npm run setup` | Re-copy WASM files / re-download the model |
@@ -61,6 +62,13 @@ Control is **off** until you click **Control my PC**. Then one hand (right by de
 | Pinch and hold, move, let go | Drag and drop. If tracking loses the pinch or your hand for a moment, the drag keeps holding; it drops once the pinch has been gone for 500 ms (**Settings → Sensitivity → Drop drag after**) |
 | Any other gesture | Whatever you set in **Keybinds** (see below) |
 | **Ctrl+Alt+H** (works from any app) | Turn control off or on |
+
+### Saved settings
+
+In the desktop app every setting and keybind is saved to one file as you change it, and loaded when
+the app starts: `%APPDATA%\hand-gestures\settings.json` (**Settings → Saved settings → Show the file**).
+It is plain JSON, so you can back it up or copy it to another PC. In a browser, settings are kept in the
+browser's own storage instead.
 
 ### Keybinds
 

@@ -546,6 +546,10 @@ export class HandTrackingApp {
     $('set-control').hidden = false;
     $('btn-keybinds').hidden = false;
     new KeybindsPanel();
+    // Settings → Saved settings: where the file is.
+    $('set-file').hidden = false;
+    void bridge.settingsFile.path().then((p) => { $('settings-file-path').textContent = p; });
+    $('btn-settings-file').addEventListener('click', () => bridge.settingsFile.reveal());
 
     try {
       Object.assign(ctl.options, JSON.parse(localStorage.getItem(CONTROL_STORAGE) ?? '{}') as Partial<ControlOptions>);

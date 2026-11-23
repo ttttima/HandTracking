@@ -22,6 +22,13 @@ contextBridge.exposeInMainWorld('pcControl', {
     path: typeof app?.path === 'string' ? app.path : undefined,
   }),
   info: () => ipcRenderer.invoke('input:info'),
+  settingsFile: {
+    read: () => ipcRenderer.sendSync('settings:read'),
+    write: (settings) => ipcRenderer.send('settings:write', settings),
+    writeNow: (settings) => ipcRenderer.sendSync('settings:write-now', settings),
+    path: () => ipcRenderer.invoke('settings:path'),
+    reveal: () => ipcRenderer.send('settings:reveal'),
+  },
   setAlwaysOnTop: (on) => ipcRenderer.send('window:on-top', !!on),
   onToggle: (cb) => {
     const handler = () => cb();

@@ -179,6 +179,7 @@ kbd { font: inherit; font-weight: 600; padding: 0 5px; border: 1px solid var(--r
 .check input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--soot); }
 .check small { display: block; color: var(--ink-2); font-size: 12.5px; }
 .drawer-note { color: var(--ink-2); font-size: 13.5px; max-width: 60ch; }
+.file-path { font-size: 13px; overflow-wrap: anywhere; margin: 6px 0 10px; }
 .set-group { margin: 6px 0 10px; }
 .set-group h3 { font-size: 13.5px; font-weight: 650; color: var(--ink-2); margin-bottom: 4px; }
 .set-field { padding: 7px 0; }
