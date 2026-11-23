@@ -178,7 +178,12 @@ point numbers, air draw), and sensitivity sliders for every threshold.
 
 Keyboard: **C** camera, **S** skeleton, **O** outline, **G** sign recognition, **M** mirror, **F** smoothing, **I** point numbers, **D** air draw, **Esc** close settings.
 
-**Air draw**: touch thumb and index to draw in the air, hold a fist to clear.
+**Air draw**: press **Draw** on the picture (or the D key). The hand skeleton is hidden and only the pen is shown:
+a ring at your fingertips while you hover, a filled dot while you pinch thumb and index to draw. **Clear** (or
+holding a fist) wipes the drawing. While drawing, PC control holds the mouse still, so pinching never clicks. The pen holds a line
+through a wobbly pinch: it starts on a real pinch (index reaching out, so a fist never draws), stays down
+until your fingers are clearly apart, and ignores the hand dropping out for under 0.2 s. It follows the raw
+fingertips through its own filter, trailing the finger by about 5–25 ms (see `tests/draw.test.ts`).
 
 **Palette**: built around stone `#A69F98`, with muted earthy neighbours: bone `#EBE7E1`, soot `#221E1B`,
 slate `#9FB3BB` (left hand), clay `#D9A58C` (right hand), and finger colours clay, ochre, sage, slate and mauve.

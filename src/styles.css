@@ -105,6 +105,17 @@ kbd { font: inherit; font-weight: 600; padding: 0 5px; border: 1px solid var(--r
 .stage.mirror video, .stage.mirror img { transform: scaleX(-1); }
 .stage .layer { pointer-events: none; }
 
+.stage-tools { position: absolute; top: 14px; right: 14px; z-index: 3; display: flex; gap: 8px; }
+.stage-tools[hidden] { display: none; }
+.btn.tool {
+  height: 36px; padding: 0 16px; border-radius: 18px; font-weight: 600;
+  background: rgba(34, 30, 27, 0.72); color: var(--bone); border-color: rgba(235, 231, 225, 0.35);
+}
+.btn.tool:hover:not(:disabled) { background: rgba(34, 30, 27, 0.9); }
+.btn.tool[aria-pressed='true'], .btn.tool[aria-pressed='true']:hover:not(:disabled) { background: var(--bone); color: var(--soot); border-color: var(--bone); }
+.btn.tool[aria-pressed='true']:hover:not(:disabled) { background: #fffaf4; }
+.btn.tool:focus-visible { outline: 2px solid var(--bone); outline-offset: 2px; }
+
 .calib {
   position: absolute; left: 16px; top: 16px; z-index: 3; width: min(340px, calc(100% - 32px));
   display: grid; gap: 8px; padding: 14px 16px; border-radius: 10px;

@@ -96,12 +96,23 @@ try {
   await page.waitForTimeout(300);
   const calibShown = await page.evaluate(() => !document.getElementById('calib').hidden && window.handGestures.app.control.suspended);
   const movesBefore = (await app.evaluate(() => globalThis.__hgInputLog ?? [])).filter((e) => e.op === 'move').length;
-  if (process.env.HG_SCREENSHOT_CALIB) { await page.waitForTimeout(4000); await page.screenshot({ path: process.env.HG_SCREENSHOT_CALIB }); await page.waitForTimeout(4600); }
-  else await page.waitForTimeout(8600);
+  // Count moves only while calibration is still running (it lasts 8 s); then let it finish.
+  if (process.env.HG_SCREENSHOT_CALIB) { await page.waitForTimeout(4000); await page.screenshot({ path: process.env.HG_SCREENSHOT_CALIB }); await page.waitForTimeout(3000); }
+  else await page.waitForTimeout(7000);
   const movesDuring = (await app.evaluate(() => globalThis.__hgInputLog ?? [])).filter((e) => e.op === 'move').length - movesBefore;
+  await page.waitForTimeout(1600);
   const calibEnd = await page.evaluate(() => ({ open: !document.getElementById('calib').hidden, box: window.handGestures.app.control.options.box, toast: [...document.querySelectorAll('.toast')].map((t) => t.textContent).join(' | ') }));
   record('reach calibration runs and keeps the mouse still', calibShown && movesDuring === 0 && !calibEnd.open, `${movesDuring} moves while calibrating`);
   record('a hand that never moved is not accepted as a reach', calibEnd.box === null && /too small/.test(calibEnd.toast), calibEnd.toast);
+  // Draw button on the picture: draw mode hides the hand drawing and holds PC control.
+  await page.click('#btn-draw');
+  await page.waitForTimeout(600);
+  const draw = await page.evaluate(() => ({ text: document.getElementById('btn-draw').textContent, clear: !document.getElementById('btn-draw-clear').hidden, held: window.handGestures.app.control.suspended }));
+  if (process.env.HG_SCREENSHOT_DRAW) await page.screenshot({ path: process.env.HG_SCREENSHOT_DRAW });
+  await page.click('#btn-draw');
+  await page.waitForTimeout(200);
+  const drawOff = await page.evaluate(() => ({ text: document.getElementById('btn-draw').textContent, held: window.handGestures.app.control.suspended }));
+  record('Draw button turns draw mode on and off, holding PC control meanwhile', draw.text === 'Stop drawing' && draw.clear && draw.held && drawOff.text === 'Draw' && !drawOff.held, `${JSON.stringify(draw)} → ${JSON.stringify(drawOff)}`);
   await page.evaluate(() => window.pcControl.minimizeActiveWindow());
   await page.waitForTimeout(200);
   const minimized = (await app.evaluate(() => globalThis.__hgInputLog ?? [])).filter((e) => e.op === 'minimize');

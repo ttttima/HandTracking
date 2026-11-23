@@ -14,6 +14,8 @@ export interface RenderOptions {
   outline: boolean;
   landmarkIds: boolean;
   gestureLabels: boolean;
+  /** False in draw mode: no skeleton, outline or labels (the pen dot is drawn by AirCanvas). */
+  hands?: boolean;
   /** When PC control is on: the control box and pointer anchor to draw. */
   control?: ControlView | null;
   /** While calibrating reach: the swept points and the area they cover so far. */
@@ -66,7 +68,7 @@ export class SkeletonRenderer {
   draw(hands: HandFeatures[], gestures: Map<string, HandGestureState>, opts: RenderOptions, now: number): void {
     this.resize();
     this.ctx.clearRect(0, 0, this.w, this.h);
-    for (const hand of hands) {
+    for (const hand of opts.hands === false ? [] : hands) {
       const pts = hand.image.map((p) => this.toPx(p, opts.mirror));
       const palmPx = Math.hypot(pts[0].x - pts[9].x, pts[0].y - pts[9].y);
       const tint = HAND_COLORS[hand.handedness] ?? PALETTE.bone;

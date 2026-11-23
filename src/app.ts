@@ -348,10 +348,12 @@ export class HandTrackingApp {
       outline: this.flags.outline,
       landmarkIds: this.flags.ids,
       gestureLabels: this.flags.gestures,
-      control: this.control?.isOn && !this.calib ? this.control.view : null,
+      hands: !this.flags.air,
+      control: this.control?.isOn && !this.calib && !this.flags.air ? this.control.view : null,
       calibration: this.calib?.view ?? null,
     }, now);
     this.air.draw();
+    if (this.tools.hidden === !!this.source) this.tools.hidden = !this.source;
     if (this.source) {
       this.ui.update({
         hands: this.hands,
@@ -437,10 +439,10 @@ export class HandTrackingApp {
       const states = this.engine.update(this.hands, now);
       this.hands.forEach((h, i) => this.gestures.set(h.id, states[i]));
     }
-    this.air.update(this.hands, this.flags.mirror, aspect);
+    this.air.update(this.hands, this.flags.mirror, aspect, now);
     this.control?.update(this.hands, this.flags.mirror, now);
     if (this.control && this.badge) {
-      if (this.calib) this.badge.hide(); // the picture shows what to do while calibrating
+      if (this.calib || this.flags.air) this.badge.hide(); // calibrating or drawing: control is held
       else this.badge.update(this.control.view, this.control.view.state, this.gestures, pauseGesture());
     }
     if (this.calib) {
@@ -471,7 +473,15 @@ export class HandTrackingApp {
       this.stage.classList.toggle('mirror', value);
       this.ui.setMirror(value);
     }
-    if (flag === 'air') this.air.enabled = value;
+    if (flag === 'air') {
+      this.air.enabled = value;
+      const btn = $('btn-draw');
+      btn.setAttribute('aria-pressed', String(value));
+      btn.textContent = value ? 'Stop drawing' : 'Draw';
+      $('btn-draw-clear').hidden = !value;
+      this.applySuspend();
+      this.describeControl();
+    }
     if (flag === 'gestures' && !value) {
       this.engine.reset();
       this.gestures.clear();
@@ -491,7 +501,16 @@ export class HandTrackingApp {
     }
   }
 
+  /** PC control holds still while calibrating or drawing (pinching to draw must not click). */
+  private applySuspend() {
+    if (this.control) this.control.suspended = !!this.calib || this.flags.air;
+  }
+
+  private tools = $('stage-tools');
+
   private bindControls() {
+    $('btn-draw').addEventListener('click', () => this.setFlag('air', !this.flags.air));
+    $('btn-draw-clear').addEventListener('click', () => this.air.clear());
     this.cameraBtn.addEventListener('click', () => (this.source?.kind === 'camera' ? this.stopCamera() : this.startCamera()));
     $('btn-empty-camera').addEventListener('click', () => this.startCamera());
     this.cameraSelect.addEventListener('change', () => { if (this.source?.kind === 'camera') this.startCamera(); });
@@ -655,12 +674,12 @@ export class HandTrackingApp {
     this.settings.toggle(false);
     const handName = `${ctl.options.hand.toLowerCase()} hand`;
     this.calib = new ReachCalibrator(ctl.options.hand);
-    ctl.suspended = true; // nothing moves or clicks while you sweep
+    this.applySuspend(); // nothing moves or clicks while you sweep
     $('calib').hidden = false;
     this.calibDone = (result) => {
       this.calib = null;
       this.calibDone = null;
-      ctl.suspended = false;
+      this.applySuspend();
       $('calib').hidden = true;
       if (!result) return;
       if (result.ok) {
@@ -706,7 +725,7 @@ export class HandTrackingApp {
     line.dataset.state = v.state;
     const what = v.state === 'paused'
       ? `Off for now. ${pauseGesture() ? `To turn it back on, ${pauseGesture()}.` : `Press ${this.controlShortcut} to stop.`}`
-      : `Your ${hand} moves the mouse.`;
+      : this.flags.air ? 'Drawing: the mouse is held until you press Stop drawing.' : `Your ${hand} moves the mouse.`;
     line.textContent = reason && !['Started', 'Resumed', 'Paused'].includes(reason) ? `${what} Last action: ${reason.toLowerCase()}.` : what;
   }
 
