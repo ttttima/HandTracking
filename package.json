@@ -1,0 +1,66 @@
+{
+  "name": "hand-gestures",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Real-time hand tracking and gesture recognition that can control your PC (MediaPipe Tasks Vision + TypeScript + Electron)",
+  "author": "HandGestures",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "setup": "node scripts/setup-assets.mjs",
+    "postinstall": "node scripts/setup-assets.mjs",
+    "dev": "vite",
+    "start": "vite --open",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "verify": "node scripts/verify-e2e.mjs",
+    "desktop": "node scripts/desktop-dev.mjs",
+    "desktop:start": "npm run build && electron .",
+    "desktop:dist": "npm run build && electron-builder --win portable --x64",
+    "verify:desktop": "npm run build && node scripts/verify-desktop.mjs",
+    "verify:background": "npm run build && node scripts/verify-background.mjs"
+  },
+  "dependencies": {
+    "koffi": "3.3.7"
+  },
+  "devDependencies": {
+    "@fontsource-variable/archivo": "5.3.0",
+    "@mediapipe/tasks-vision": "1.2.2",
+    "electron": "45.2.3",
+    "electron-builder": "26.18.1",
+    "playwright-core": "1.65.0",
+    "typescript": "6.0.3",
+    "vite": "8.3.7",
+    "vitest": "5.1.0"
+  },
+  "build": {
+    "appId": "local.handgestures.app",
+    "productName": "HandGestures",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/koffi/**"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "HandGestures-${version}-portable.exe"
+    }
+  }
+}
