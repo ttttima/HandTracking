@@ -15,6 +15,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const input = require('./input.cjs');
 const apps = require('./apps.cjs');
+const desktops = require('./desktops.cjs');
 
 const DEV_URL = process.env.VITE_DEV_SERVER_URL || '';
 const START_QUERY = process.env.HG_START_QUERY ? `?${process.env.HG_START_QUERY}` : '';
@@ -119,6 +120,7 @@ function registerIpc() {
   ipcMain.on('window:minimize-foreground', guard(() => input.minimizeForeground()));
   ipcMain.on('window:toggle-desktop', guard(() => input.toggleDesktop()));
   ipcMain.on('input:keys', guard((combo) => input.sendKeys(combo)));
+  ipcMain.on('desktop:switch', guard((which) => { void desktops.switchDesktop(which); }));
   ipcMain.handle('apps:list', guard(() => apps.listApps()));
   ipcMain.handle('apps:pick', guard(() => apps.pickProgram(win)));
   ipcMain.on('apps:open', guard((app) => { void apps.openApp(app); }));

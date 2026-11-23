@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('pcControl', {
   minimizeActiveWindow: () => ipcRenderer.send('window:minimize-foreground'),
   toggleDesktop: () => ipcRenderer.send('window:toggle-desktop'),
   sendKeys: (combo) => ipcRenderer.send('input:keys', String(combo)),
+  switchDesktop: (which) => ipcRenderer.send('desktop:switch', which === 'first' ? 'first' : 'second'),
   listApps: () => ipcRenderer.invoke('apps:list'),
   pickProgram: () => ipcRenderer.invoke('apps:pick'),
   openApp: (app) => ipcRenderer.send('apps:open', {

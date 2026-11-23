@@ -121,6 +121,14 @@ try {
   const appLog = (await app.evaluate(() => globalThis.__hgInputLog ?? [])).filter((e) => e.op.startsWith('open-app'));
   record('a listed app reaches the launcher (dry run)', appLog.some((e) => e.op === 'open-app' && e.app === calc.name), `${calc.name}`);
   record('unlisted apps and other files are refused', appLog.filter((e) => e.op === 'open-app-rejected').length === 2, appLog.map((e) => e.op).join(', '));
+  // Virtual desktops (dry run: the real desktop state is read, nothing is switched).
+  await page.evaluate(() => { window.pcControl.switchDesktop('first'); });
+  await page.waitForTimeout(700);
+  await page.evaluate(() => { window.pcControl.switchDesktop('second'); });
+  await page.waitForTimeout(700);
+  const deskLog = (await app.evaluate(() => globalThis.__hgInputLog ?? [])).filter((e) => e.op.startsWith('desktop-'));
+  record('desktop switching reads the real desktop state', deskLog.length === 2 && deskLog.every((e) => e.count >= 1),
+    deskLog.map((e) => `${e.op} (${e.count} desktops, on #${e.index + 1})`).join(', '));
   await page.click('#btn-close-keybinds');
   await page.evaluate(() => window.handGestures.app.engine.reset()); // re-show the peace sign
   await page.waitForTimeout(2000);

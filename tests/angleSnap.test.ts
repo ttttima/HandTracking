@@ -79,6 +79,7 @@ describe('PC control with angle snapping', () => {
       move: (x, y) => moves.push({ x, y }),
       button: () => {}, click: () => {}, scroll: () => {}, releaseAll: () => {},
       minimizeActiveWindow: () => {}, toggleDesktop: () => {}, sendKeys: () => {}, openApp: () => {},
+      switchDesktop: () => {},
     };
     const ctl = new PcController(bus, bridge, t);
     ctl.screenAspect = 1;

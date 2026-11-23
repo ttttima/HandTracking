@@ -26,6 +26,7 @@ function rig() {
     toggleDesktop: () => calls.push('win+d'),
     sendKeys: (combo) => calls.push(`keys:${combo}`),
     openApp: (app) => calls.push(`open:${app.name}`),
+    switchDesktop: (which) => calls.push(`desktop:${which}`),
   };
   const ctl = new PcController(bus, bridge, t);
   let now = 1000;
@@ -251,6 +252,47 @@ describe('keybinds', () => {
     r.play({ ...POSES.open_palm, at: { x: 0.5, y: 0.8 } }, 800); // settle before swiping
     for (let i = 0; i <= 8; i++) r.play({ ...POSES.open_palm, at: { x: 0.5, y: 0.8 - i * 0.075 } }, FRAME);
     expect(r.actions()).toEqual(['click:right', 'minimize', 'scroll:4']);
+  });
+
+  it('defaults: swipe left = second desktop, swipe right = back to the first', () => {
+    const r = rig();
+    r.ctl.start();
+    r.play({ ...POSES.open_palm, at: { x: 0.3, y: 0.5 } }, 800);
+    // Mirrored view: image x increasing = the hand moves left on screen.
+    for (let i = 0; i <= 6; i++) r.play({ ...POSES.open_palm, at: { x: 0.3 + i * 0.04, y: 0.5 } }, FRAME);
+    r.play({ ...POSES.open_palm, at: { x: 0.54, y: 0.5 } }, 1000);
+    for (let i = 0; i <= 6; i++) r.play({ ...POSES.open_palm, at: { x: 0.54 - i * 0.04, y: 0.5 } }, FRAME);
+    expect(r.actions()).toEqual(['desktop:second', 'desktop:first']);
+  });
+
+  it('older saved keybinds pick up the new swipe defaults, but keep what you chose', async () => {
+    const { keybinds, loadKeybinds, resetKeybinds } = await import('../src/control/keybinds');
+    const store = new Map<string, string>();
+    const prev = (globalThis as { localStorage?: unknown }).localStorage;
+    (globalThis as { localStorage?: unknown }).localStorage = {
+      getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => { store.set(k, v); },
+    };
+    try {
+      // Saved before revisions existed: swipe left was Nothing, swipe right was set by the user.
+      store.set('handgestures.keybinds.v1', JSON.stringify({
+        swipe_left: { action: 'none', trigger: 'made' },
+        swipe_right: { action: 'keys', keys: 'Alt+Tab', trigger: 'made' },
+        peace: { action: 'none', trigger: 'made' },
+      }));
+      loadKeybinds();
+      expect(keybinds.swipe_left.action).toBe('desktop_second');
+      expect(keybinds.swipe_right.action).toBe('keys');
+      expect(keybinds.peace.action).toBe('none');
+      // Once upgraded, clearing it again sticks.
+      keybinds.swipe_left = { action: 'none', trigger: 'made' };
+      const { saveKeybinds } = await import('../src/control/keybinds');
+      saveKeybinds();
+      loadKeybinds();
+      expect(keybinds.swipe_left.action).toBe('none');
+    } finally {
+      (globalThis as { localStorage?: unknown }).localStorage = prev;
+      resetKeybinds();
+    }
   });
 
   it('a gesture can be rebound to a keyboard shortcut', async () => {

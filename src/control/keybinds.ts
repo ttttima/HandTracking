@@ -20,6 +20,8 @@ export type ActionKind =
   | 'scroll_down'
   | 'minimize_window'
   | 'show_desktop'
+  | 'desktop_second'
+  | 'desktop_first'
   | 'pause_control'
   | 'open_app'
   | 'keys';
@@ -68,6 +70,8 @@ export const ACTIONS: { id: ActionKind; label: string }[] = [
   { id: 'scroll_down', label: 'Scroll down' },
   { id: 'minimize_window', label: 'Minimise window' },
   { id: 'show_desktop', label: 'Show desktop / bring windows back (Win+D)' },
+  { id: 'desktop_second', label: 'Go to second desktop (creates it)' },
+  { id: 'desktop_first', label: 'Back to first desktop' },
   { id: 'pause_control', label: 'Pause or resume control' },
   { id: 'open_app', label: 'Open an app…' },
   { id: 'keys', label: 'Keyboard shortcut…' },
@@ -105,6 +109,8 @@ export function defaultKeybinds(): Record<BindTarget, Keybind> {
   map.peace = { action: 'right_click', trigger: 'made' };
   map.middle_finger = { action: 'minimize_window', trigger: 'made' };
   map.fist = { action: 'pause_control', trigger: 'held' };
+  map.swipe_left = { action: 'desktop_second', trigger: 'made' };
+  map.swipe_right = { action: 'desktop_first', trigger: 'made' };
   map.swipe_up = { action: 'scroll_up', trigger: 'made' };
   map.swipe_down = { action: 'scroll_down', trigger: 'made' };
   return map;
@@ -114,11 +120,22 @@ export function defaultKeybinds(): Record<BindTarget, Keybind> {
 export const keybinds: Record<BindTarget, Keybind> = defaultKeybinds();
 
 const STORAGE = 'handgestures.keybinds.v1';
+/**
+ * Bumped when new default binds are added. Saved binds from an older revision pick up the new
+ * defaults for targets that were still set to Nothing.
+ */
+const REVISION = 2;
+const NEW_DEFAULTS: Record<number, BindTarget[]> = { 2: ['swipe_left', 'swipe_right'] };
 const ACTION_IDS = new Set(ACTIONS.map((a) => a.id));
 
 export function loadKeybinds(): void {
   try {
-    const saved = JSON.parse(globalThis.localStorage?.getItem(STORAGE) ?? '{}') as Partial<Record<BindTarget, Keybind>>;
+    const raw = globalThis.localStorage?.getItem(STORAGE);
+    const saved = JSON.parse(raw ?? '{}') as Partial<Record<BindTarget, Keybind>> & { revision?: number };
+    const savedRev = raw ? (typeof saved.revision === 'number' ? saved.revision : 1) : REVISION;
+    const defaults = defaultKeybinds();
+    const upgrade = new Set<BindTarget>();
+    for (let r = savedRev + 1; r <= REVISION; r++) for (const t of NEW_DEFAULTS[r] ?? []) upgrade.add(t);
     for (const t of BIND_TARGETS) {
       const b = saved[t.id];
       if (!b || !ACTION_IDS.has(b.action)) continue;
@@ -126,7 +143,9 @@ export function loadKeybinds(): void {
         ? { name: b.app.name, id: typeof b.app.id === 'string' ? b.app.id : undefined, path: typeof b.app.path === 'string' ? b.app.path : undefined }
         : undefined;
       keybinds[t.id] = { action: b.action, keys: typeof b.keys === 'string' ? b.keys : undefined, app, trigger: b.trigger === 'held' && !t.swipe ? 'held' : 'made' };
+      if (upgrade.has(t.id) && b.action === 'none') keybinds[t.id] = { ...defaults[t.id] };
     }
+    if (savedRev < REVISION) saveKeybinds();
   } catch {
     /* keep defaults */
   }
@@ -134,7 +153,7 @@ export function loadKeybinds(): void {
 
 export function saveKeybinds(): void {
   try {
-    globalThis.localStorage?.setItem(STORAGE, JSON.stringify(keybinds));
+    globalThis.localStorage?.setItem(STORAGE, JSON.stringify({ ...keybinds, revision: REVISION }));
   } catch {
     /* ignore */
   }

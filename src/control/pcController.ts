@@ -36,6 +36,8 @@ export interface PcBridge {
   sendKeys(combo: string): void;
   /** Open an installed app or a chosen program. */
   openApp(app: AppRef): void;
+  /** Second virtual desktop (created if missing) or back to the first; see electron/desktops.cjs. */
+  switchDesktop(which: 'second' | 'first'): void;
 }
 
 export interface ControlOptions {
@@ -196,6 +198,8 @@ export class PcController {
       case 'scroll_down': this.bridge.scroll(-SCROLL_NOTCHES); break;
       case 'minimize_window': this.bridge.minimizeActiveWindow(); break;
       case 'show_desktop': this.bridge.toggleDesktop(); break;
+      case 'desktop_second': this.bridge.switchDesktop('second'); break;
+      case 'desktop_first': this.bridge.switchDesktop('first'); break;
       case 'pause_control':
         this.setState(this.state === 'active' ? 'paused' : 'active', this.state === 'active' ? 'Paused' : 'Resumed');
         return;

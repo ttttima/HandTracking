@@ -70,13 +70,17 @@ the four swipe directions. Either hand can trigger them. Each one can be set to:
 
 - Nothing, left click, right click, double click, scroll up, scroll down
 - Minimise window, show desktop / bring windows back (Win+D), pause or resume control
+- **Second desktop**: from your original desktop, go to a second virtual desktop, creating it if it does
+  not exist yet. **Back to first desktop** returns to the original. At most two desktops are used: on the
+  second desktop, "second" does nothing, and on the original, "back" does nothing.
 - **Open an app**: search the list of installed apps (everything in the Start menu, including Store apps
   such as Calculator or Settings), or **Browse…** for any program (.exe or shortcut)
 - **Any keyboard shortcut**: type it (`Ctrl+Shift+T`, `Win+E`, `Alt+F4`…), press **Record** and press the
   keys, or pick a common one (Alt+Tab, copy/paste, media play/pause, volume…)
 
 Signs can fire **when made** or **when held** for about a second. Defaults: peace = right click, middle
-finger = minimise window, hold fist = pause or resume, swipe up/down = scroll. Gestures switched off in
+finger = minimise window, hold fist = pause or resume, swipe left = second desktop, swipe right = back to
+the first desktop, swipe up/down = scroll. Gestures switched off in
 Settings → Gestures never fire.
 
 The box drawn on the picture is the part of the camera view that covers your whole screen,
