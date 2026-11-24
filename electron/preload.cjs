@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld('pcControl', {
     path: () => ipcRenderer.invoke('settings:path'),
     reveal: () => ipcRenderer.send('settings:reveal'),
   },
+  /** What is running, so the window can resume it if the page ever crashes or hangs. */
+  reportState: (st) => ipcRenderer.send('app:state', { camera: !!st?.camera, control: !!st?.control }),
   /** The status badge next to the mouse pointer (electron/overlay.cjs). */
   setOverlay: (state) => ipcRenderer.send('overlay:update', state),
   setAlwaysOnTop: (on) => ipcRenderer.send('window:on-top', !!on),

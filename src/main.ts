@@ -14,6 +14,7 @@ declare global {
       info(): Promise<{ available: boolean; dryRun: boolean; error: string | null; screen: { width: number; height: number }; shortcut: string }>;
       setAlwaysOnTop(on: boolean): void;
       setOverlay(state: import('./control/cursorBadge').BadgeState): void;
+      reportState?(state: { camera: boolean; control: boolean }): void;
       setScreens(mode: 'primary' | 'all'): Promise<{ x: number; y: number; width: number; height: number }>;
       onToggle(cb: () => void): () => void;
       listApps(): Promise<{ name: string; id: string }[]>;

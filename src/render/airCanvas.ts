@@ -47,6 +47,12 @@ export class AirCanvas {
   private pens = new Map<string, Pen>();
   private snappers = new Map<string, AngleSnapper>();
   private cursors: { x: number; y: number; drawing: boolean; color: string }[] = [];
+  /**
+   * Finished lines are drawn once into this picture and copied each frame, so drawing stays just as
+   * fast however much has been drawn (only the lines being drawn right now are redrawn every frame).
+   */
+  private cache: HTMLCanvasElement | null = null;
+  private cached = new Set<Stroke>();
 
   constructor(private canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -54,6 +60,8 @@ export class AirCanvas {
 
   clear(): void {
     this.strokes = [];
+    this.cached.clear();
+    this.cache?.getContext('2d')?.clearRect(0, 0, this.cache.width, this.cache.height);
     for (const pen of this.pens.values()) { pen.stroke = null; pen.pending = []; }
   }
 
@@ -150,6 +158,24 @@ export class AirCanvas {
     if (!last || Math.hypot(last.x - p.x, last.y - p.y) > 0.002) stroke.pts.push(p);
   }
 
+  private strokeLine(ctx: CanvasRenderingContext2D, s: Stroke, w: number, h: number, dpr: number) {
+    if (s.pts.length < 2) return;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = s.color;
+    ctx.lineWidth = s.width * dpr;
+    ctx.beginPath();
+    ctx.moveTo(s.pts[0].x * w, s.pts[0].y * h);
+    for (let i = 1; i < s.pts.length - 1; i++) {
+      const mx = ((s.pts[i].x + s.pts[i + 1].x) / 2) * w;
+      const my = ((s.pts[i].y + s.pts[i + 1].y) / 2) * h;
+      ctx.quadraticCurveTo(s.pts[i].x * w, s.pts[i].y * h, mx, my);
+    }
+    const last = s.pts[s.pts.length - 1];
+    ctx.lineTo(last.x * w, last.y * h);
+    ctx.stroke();
+  }
+
   draw(): void {
     const c = this.canvas;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -160,26 +186,25 @@ export class AirCanvas {
     ctx.clearRect(0, 0, w, h);
     if (!this.enabled) return;
 
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    for (const s of this.strokes) {
-      if (s.pts.length < 2) continue;
-      ctx.strokeStyle = s.color;
-      ctx.shadowColor = s.color;
-      ctx.shadowBlur = 0;
-      ctx.lineWidth = s.width * dpr;
-      ctx.beginPath();
-      ctx.moveTo(s.pts[0].x * w, s.pts[0].y * h);
-      for (let i = 1; i < s.pts.length - 1; i++) {
-        const mx = ((s.pts[i].x + s.pts[i + 1].x) / 2) * w;
-        const my = ((s.pts[i].y + s.pts[i + 1].y) / 2) * h;
-        ctx.quadraticCurveTo(s.pts[i].x * w, s.pts[i].y * h, mx, my);
-      }
-      const last = s.pts[s.pts.length - 1];
-      ctx.lineTo(last.x * w, last.y * h);
-      ctx.stroke();
+    // Finished lines: add any new ones to the cached picture (all of them again after a resize).
+    let cache = this.cache;
+    if (!cache || cache.width !== w || cache.height !== h) {
+      cache = this.cache ??= document.createElement('canvas');
+      cache.width = w;
+      cache.height = h;
+      this.cached.clear();
     }
-    ctx.shadowBlur = 0;
+    const live = new Set<Stroke>();
+    for (const pen of this.pens.values()) if (pen.stroke) live.add(pen.stroke);
+    const cctx = cache.getContext('2d')!;
+    for (const s of this.strokes) {
+      if (live.has(s) || this.cached.has(s)) continue;
+      this.strokeLine(cctx, s, w, h, dpr);
+      this.cached.add(s);
+    }
+    ctx.drawImage(cache, 0, 0);
+    // Lines being drawn right now.
+    for (const s of live) this.strokeLine(ctx, s, w, h, dpr);
     // The pen: a ring while hovering, a filled dot while drawing (pinched). A dark edge keeps it
     // visible on any background.
     for (const cur of this.cursors) {

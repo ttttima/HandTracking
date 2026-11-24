@@ -55,6 +55,15 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required'); // 
 if (!app.requestSingleInstanceLock()) app.quit();
 
 let win = null;
+/** What the page last said was running (camera, mouse control): resumed after a crash. */
+let runState = { camera: false, control: false };
+/** Times the page was reloaded after crashing; stops trying if it keeps crashing. */
+const crashReloads = [];
+let hangTimer = null;
+/** A page that has not answered for this long is hung: restart it. */
+const HANG_MS = 20000;
+const PING_MS = 5000;
+let lastAnswer = Date.now();
 
 function isOurPage(frameUrl) {
   return frameUrl.startsWith(`${APP_ORIGIN}/`) || (DEV_URL && frameUrl.startsWith(DEV_URL));
@@ -100,7 +109,26 @@ function createWindow() {
     overlay.destroy();
     win = null;
   });
-  win.webContents.on('render-process-gone', () => input.releaseAll());
+  // Long-run safety: if the page crashes, reload it and carry on; if it hangs for 15 s, end it (which
+  // reloads it). Mouse buttons are released either way.
+  win.webContents.on('render-process-gone', (_e, details) => {
+    input.releaseAll();
+    overlay.update({ show: false });
+    clearTimeout(hangTimer);
+    if (details.reason === 'clean-exit' || !win) return;
+    console.warn(`[health] page gone (${details.reason}), reloading`);
+    reloadAndResume();
+  });
+  win.webContents.on('unresponsive', () => {
+    clearTimeout(hangTimer);
+    hangTimer = setTimeout(() => {
+      console.warn('[health] page hung for 15 s, restarting it');
+      input.releaseAll();
+      win?.webContents.forcefullyCrashRenderer();
+    }, 15000);
+  });
+  win.webContents.on('responsive', () => clearTimeout(hangTimer));
+  win.webContents.on('did-start-loading', () => { lastAnswer = Date.now(); });
   // Links open in the real browser, never inside the app.
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) shell.openExternal(url);
@@ -112,11 +140,22 @@ function createWindow() {
   win.loadURL(DEV_URL ? `${DEV_URL}${START_QUERY}` : `${APP_ORIGIN}/index.html${START_QUERY}`);
 }
 
+function reloadAndResume() {
+  const now = Date.now();
+  while (crashReloads.length && now - crashReloads[0] > 120000) crashReloads.shift();
+  crashReloads.push(now);
+  if (crashReloads.length > 3) return; // crashing in a loop: leave it for the user
+  const parts = [runState.camera && 'camera', runState.control && 'control'].filter(Boolean);
+  const q = parts.length ? `?resume=${parts.join(',')}` : '';
+  win.loadURL(DEV_URL ? `${DEV_URL}${q}` : `${APP_ORIGIN}/index.html${q}`);
+}
+
 function registerIpc() {
   const guard = (fn) => (event, ...args) => {
     if (!event.senderFrame || !isOurPage(event.senderFrame.url)) return;
     return fn(...args);
   };
+  ipcMain.on('app:state', guard((st) => { runState = { camera: !!st?.camera, control: !!st?.control }; }));
   ipcMain.on('input:move', guard((x, y, snap) => input.moveTo(x, y, !!snap)));
   ipcMain.handle('input:area', guard((mode) => input.setArea(mode)));
   ipcMain.on('input:button', guard((which, down) => input.button(which, down)));
@@ -164,6 +203,20 @@ app.whenReady().then(() => {
 
   registerIpc();
   createWindow();
+
+  // Hang watch. Electron only notices a hung page when it ignores keyboard or mouse input, and this
+  // app is often used without touching its window. So every few seconds the page is asked to run a
+  // tiny script: a busy page answers at once (even minimised), a hung one never does.
+  setInterval(() => {
+    const wc = win?.webContents;
+    if (!wc || wc.isCrashed() || wc.isLoading()) { lastAnswer = Date.now(); return; }
+    wc.executeJavaScript('1').then(() => { lastAnswer = Date.now(); }).catch(() => {});
+    if (Date.now() - lastAnswer < HANG_MS) return;
+    lastAnswer = Date.now();
+    console.warn(`[health] page did not answer for ${HANG_MS / 1000} s, restarting it`);
+    input.releaseAll();
+    wc.forcefullyCrashRenderer(); // → render-process-gone → reloadAndResume
+  }, PING_MS);
 
   // Works even when another app is focused: turns mouse control off/on.
   globalShortcut.register(TOGGLE_SHORTCUT, () => win?.webContents.send('control:toggle'));

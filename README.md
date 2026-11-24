@@ -87,6 +87,24 @@ the app starts: `%APPDATA%\hand-gestures\settings.json` (**Settings → Saved se
 It is plain JSON, so you can back it up or copy it to another PC. In a browser, settings are kept in the
 browser's own storage instead.
 
+### Running for hours
+
+The app is built to be left on. Over a 20-minute test on the GPU (36,000 frames) memory and frame rate stayed
+flat (`npm run soak`), and it repairs itself when something goes wrong instead of quietly stopping:
+
+- **A frame that throws an error** is skipped; tracking carries on with the next one.
+- **No frames being analysed** for 3 s: the camera reader is restarted. Still nothing after 8 s: the camera is
+  reopened. After 20 s: the hand model is loaded again.
+- **The hand model failing** (for example after a graphics driver reset) is loaded again, on the CPU if
+  the GPU was the problem.
+- **The camera dropping out** (unplugged, PC asleep, another app took it) is reconnected automatically, up to
+  5 times in a row; mouse control stays on.
+- **The page crashing** or **hanging for 20 s**: the window reloads by itself and turns the camera and mouse
+  control back on if they were on (it gives up after 3 crashes in 2 minutes rather than loop).
+- **Drawing** stays just as fast however much is on the picture: finished lines are drawn once and reused.
+
+`npm run verify:health` breaks the running app in each of these ways and checks that it recovers.
+
 ### Keybinds
 
 The **Keybinds** button (top bar, desktop app) lets you choose what every gesture except pinch does while
@@ -325,17 +343,23 @@ states, gesture scores, FPS and backend. URL options: `?source=<image-or-video-u
 
 ## How it was verified
 
-- `npm test`: 35 unit tests on a synthetic 3-D hand model: every gesture, the PC controller, hysteresis, size /
-  distance / rotation invariance, pinch monotonicity, pinch at any rotation, drag, swipe, hand loss, duplicate-hand suppression.
-- `npm run verify`: 11 end-to-end checks in real Edge: MediaPipe on real hand photos
-  (peace, thumbs up, pointing, thumbs down all recognised), the full **webcam** path via Chromium's fake
-  camera streaming a hand photo (camera starts → hand tracked → gesture recognised → events fire → stops cleanly),
-  denied-permission error screen, and no uncaught page errors.
-- `npm run verify:desktop` (and `-- --packaged` for the `.exe`): 10 checks with mouse control in
-  dry-run mode: the app loads from its built files, the Windows input layer loads, a fake camera hand is
-  tracked, turning control on moves the pointer, the peace sign right-clicks, no button is left pressed,
-  and control turns off cleanly. The controller's click, drag, pause/resume and release-on-loss logic is
-  unit-tested separately.
+- `npm test`: 85 unit tests on a synthetic 3-D hand model: every gesture, the PC controller (click, drag,
+  keybinds, the on/off fist), hysteresis, size / distance / rotation invariance, pinch at any rotation, swipes,
+  hand loss, the pointer's jitter and lag (`tests/pointer.test.ts`), the drawing pen (`tests/draw.test.ts`),
+  reach calibration and the pointer badge, and bad frames from the model.
+- `npm run verify`: 11 checks in real Edge: MediaPipe on real hand photos, the full **webcam** path via
+  Chromium's fake camera, the denied-permission screen, and no page errors.
+- `npm run verify:desktop` (and `-- --packaged` for the `.exe`): 25 checks with mouse control in dry-run mode:
+  pointer moves, the peace sign right-clicks, keybinds, opening apps, virtual desktops, the pointer badge,
+  reach calibration, the Draw button, a broken position being refused, and clean shutdown.
+- `npm run verify:settings`: 6 checks that every setting and keybind survives a restart with the browser
+  storage wiped.
+- `npm run verify:background`: tracking keeps its speed while the window is minimised.
+- `npm run verify:health` (add `-- --hang` for the slow hang test): breaks the running app on purpose
+  (frame errors, the camera reader ending, a stalled loop, a failing model, the camera dropping out, a crash,
+  a hang) and checks it recovers each time.
+- `npm run soak -- 20 --gpu` (or `--cpu`, `--minimize`): runs the app for that many minutes and prints memory,
+  frame rate and model time every 30 s, so anything that slowly grows or slows down shows up.
 
 ## Credits
 

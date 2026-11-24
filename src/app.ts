@@ -104,6 +104,13 @@ export class HandTrackingApp {
   private fpsWindowStart = 0;
   private latency = 0;
   private detectErrors = 0;
+  /** Exceptions thrown while analysing frames (any part after detection); see noteFrameError. */
+  frameErrors = 0;
+  /** Self-healing actions taken (diagnostics and tests). */
+  readonly recoveries: { at: number; what: string }[] = [];
+  private watch = { frames: -1, at: 0, step: 0, lastCameraRestart: -Infinity };
+  private reconnects = 0;
+  private cameraSince = 0;
   private frameSize = { w: 1280, h: 720 };
   private eventCount = 0;
 
@@ -128,9 +135,101 @@ export class HandTrackingApp {
     this.showIdle();
     await this.refreshCameras();
 
+    window.setInterval(this.watchdog, 1000);
+
     const src = params.get('source');
+    const resume = (params.get('resume') ?? '').split(',');
     if (src) await this.loadMedia(src);
-    else if (params.get('camera') === '1') await this.startCamera();
+    else if (params.get('camera') === '1' || resume.includes('camera')) await this.startCamera();
+    // The window was reloaded after the page crashed or hung: carry on where it was.
+    if (resume.includes('control') && this.source && this.control && !this.control.isOn) this.control.start();
+    if (resume.includes('camera')) this.ui.toast('The app recovered from a crash and carried on.', 'info', 5000);
+  }
+
+  // ── Long-run health ───────────────────────────────────────────────────
+
+  /**
+   * Once a second: if the camera is on but no frame has been analysed for a while, fix it in steps,
+   * each only if the previous one did not help:
+   *   3 s   restart the frame reader (the camera stream to the model)
+   *   8 s   reopen the camera (at most once every 30 s)
+   *   20 s  reload the hand model (on the CPU if the GPU one broke)
+   */
+  private watchdog = () => {
+    const src = this.source;
+    const now = performance.now();
+    const w = this.watch;
+    if (!src || src.kind !== 'camera' || !this.detector || this.starting) {
+      w.frames = -1;
+      w.step = 0;
+      return;
+    }
+    if (this.framesProcessed !== w.frames) {
+      w.frames = this.framesProcessed;
+      w.at = now;
+      w.step = 0;
+      if (now - this.cameraSince > 60000) this.reconnects = 0; // ran fine for a minute
+      return;
+    }
+    const stalled = now - w.at;
+    if (w.step === 0 && stalled > 3000) {
+      w.step = 1;
+      this.recovered('restarted the camera reader (no frames for 3 s)');
+      this.stopFrameReader();
+      this.startFrameReader(src);
+    } else if (w.step === 1 && stalled > 8000 && now - w.lastCameraRestart > 30000) {
+      w.step = 2;
+      w.lastCameraRestart = now;
+      this.recovered('reopened the camera (no frames for 8 s)');
+      void this.startCamera();
+    } else if (w.step >= 1 && stalled > 20000 && w.step < 3) {
+      w.step = 3;
+      this.recovered('reloaded the hand model (no frames for 20 s)');
+      void this.reloadDetector();
+    }
+  };
+
+  private recovered(what: string) {
+    console.warn(`[health] ${what}`);
+    this.recoveries.push({ at: Date.now(), what });
+    if (this.recoveries.length > 50) this.recoveries.shift();
+  }
+
+  /** A frame threw somewhere after detection. Never let one bad frame stop tracking. */
+  private noteFrameError(err: unknown) {
+    this.frameErrors++;
+    if (this.frameErrors === 1 || this.frameErrors % 100 === 0) console.error(`[frame] error #${this.frameErrors}`, err);
+    // Clear per-hand state in case it is what keeps failing.
+    if (this.frameErrors % 10 === 0) {
+      this.tracker.reset();
+      this.engine.reset();
+      this.control?.cancelPress();
+    }
+  }
+
+  /** The model keeps failing (e.g. the GPU was reset): load it again, on the CPU if it was the GPU. */
+  private async reloadDetector() {
+    if (!this.detector) return;
+    const prev = this.backend;
+    if (this.detector.info.delegate === 'GPU') this.backend = 'cpu';
+    try {
+      await this.loadDetector();
+    } finally {
+      this.backend = prev; // only for this session; the saved choice is unchanged
+    }
+  }
+
+  /** The camera track ended (unplugged, taken by another app, PC asleep): try to get it back. */
+  private cameraLost(err: CameraError) {
+    if (this.reconnects >= 5) {
+      this.handleCameraError(err);
+      return;
+    }
+    this.reconnects++;
+    this.recovered(`camera ended, reconnecting (try ${this.reconnects})`);
+    this.ui.toast('The camera stopped. Reconnecting…', 'info', 3000);
+    this.stopFrameReader();
+    window.setTimeout(() => { void this.startCamera(); }, 1500 * this.reconnects);
   }
 
   // ── Detector ──────────────────────────────────────────────────────────
@@ -213,7 +312,8 @@ export class HandTrackingApp {
     this.ui.setEmpty({ title: 'Starting the camera', text: 'If your browser asks for permission, choose Allow.' });
     try {
       const src = await openCamera(this.video, this.cameraSelect.value || undefined);
-      src.onEnded = (err) => this.handleCameraError(err);
+      src.onEnded = (err) => this.cameraLost(err);
+      this.cameraSince = performance.now();
       this.useSource(src);
       this.updateReadyStatus();
       await this.refreshCameras(); // labels become available after permission is granted
@@ -312,7 +412,13 @@ export class HandTrackingApp {
     if (pick && [...this.cameraSelect.options].some((o) => o.value === pick)) this.cameraSelect.value = pick;
   }
 
+  /** Desktop app: tell the main process what is running, so it can resume after a crash. */
+  private reportRunState() {
+    window.pcControl?.reportState?.({ camera: this.source?.kind === 'camera', control: !!this.control?.isOn });
+  }
+
   private syncCameraButton() {
+    this.reportRunState();
     const on = this.source?.kind === 'camera';
     this.cameraBtn.classList.toggle('on', on);
     this.cameraBtn.querySelector('span')!.textContent = on ? 'Stop camera' : 'Start camera';
@@ -338,7 +444,9 @@ export class HandTrackingApp {
           fresh = true;
         }
       }
-      if (fresh) this.process(now);
+      if (fresh) {
+        try { this.process(now); } catch (err) { this.noteFrameError(err); }
+      }
     }
 
     const mirror = this.flags.mirror;
@@ -381,7 +489,9 @@ export class HandTrackingApp {
     const track = stream?.getVideoTracks()[0];
     if (!Processor || !track) return; // falls back to the <video> + animation-frame path
     const copy = track.clone();
-    const reader = new Processor({ track: copy }).readable.getReader();
+    // Keep only the newest frame: if analysis is ever slower than the camera, old frames are dropped
+    // instead of queueing up (which would add delay and hold camera buffers).
+    const reader = new Processor({ track: copy, maxBufferSize: 1 } as { track: MediaStreamTrack }).readable.getReader();
     this.frameReader = reader;
     this.readerTrack = copy;
     const pump = async () => {
@@ -396,9 +506,18 @@ export class HandTrackingApp {
         const frame = result.value;
         try {
           if (this.detector && this.source === src) this.process(performance.now(), frame);
+        } catch (err) {
+          this.noteFrameError(err); // one bad frame never ends the loop
         } finally {
           frame.close();
         }
+      }
+      // The stream ended without being stopped: drop the reader so the on-screen video takes over,
+      // and the watchdog starts a new reader.
+      if (this.frameReader === reader) {
+        this.frameReader = null;
+        this.readerTrack?.stop();
+        this.readerTrack = null;
       }
     };
     void pump();
@@ -421,7 +540,8 @@ export class HandTrackingApp {
     } catch (err) {
       if (++this.detectErrors === 30) {
         console.error('[detector]', err);
-        this.ui.toast(`Hand detection error: ${(err as Error).message ?? err}`, 'error', 6000);
+        this.recovered(`reloading the hand model after repeated errors: ${(err as Error).message ?? err}`);
+        void this.reloadDetector();
       }
       return;
     }
@@ -641,6 +761,7 @@ export class HandTrackingApp {
     btn.addEventListener('click', () => ctl.toggle());
     bridge.onToggle(() => ctl.toggle());
     ctl.onChange = (_view, reason) => {
+      this.reportRunState();
       if (reason === 'Started' || reason === 'Resumed') chime(true);
       else if (reason === 'Paused' || reason === 'Stopped') chime(false);
       if (reason === 'Started') {
@@ -731,6 +852,8 @@ export class HandTrackingApp {
 
   snapshot() {
     return {
+      frameErrors: this.frameErrors,
+      recoveries: this.recoveries.slice(-10),
       ready: !!this.detector,
       backend: this.detector?.info ?? null,
       source: this.source ? { kind: this.source.kind, label: this.source.label, width: this.frameSize.w, height: this.frameSize.h } : null,
